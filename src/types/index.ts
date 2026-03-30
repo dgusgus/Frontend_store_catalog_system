@@ -96,3 +96,23 @@ export interface ApiError {
   code?: string
 }
 
+// ── Cart ───────────────────────────────────────────
+export interface CartItem {
+  productId:   number
+  productName: string
+  slug:        string
+  image?:      string
+  variantId?:  number
+  variantName?: string
+  price:       number   // precio efectivo al momento de agregar
+  quantity:    number
+}
+
+export interface DiscountResult {
+  valid:          boolean
+  code:           string
+  type:           'PERCENT' | 'FIXED'
+  value:          number
+  discountAmount: number
+  finalAmount:    number
+}

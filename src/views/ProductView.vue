@@ -7,6 +7,7 @@ import type { Variant } from '../types'
 import AppNavbar from '../components/ui/AppNavbar.vue'
 import ProductGallery from '../components/products/ProductGallery.vue'
 import VariantSelector from '../components/products/VariantSelector.vue'
+import { useCartStore } from '../stores/cart.store'
 
 const route  = useRoute()
 const router = useRouter()
@@ -52,12 +53,19 @@ const canAddToCart = computed(() => {
 })
 
 // ── Acción carrito (placeholder — Paso 5 futuro) ───
+// Reemplazar la función addToCart placeholder
+const cartStore = useCartStore()
+
 function addToCart() {
-  if (!canAddToCart.value) return
+  if (!canAddToCart.value || !product.value) return
+
+  cartStore.addItem(product.value, selectedVariant.value)
+
   const label = selectedVariant.value
-    ? `${product.value!.name} — ${selectedVariant.value.name}`
-    : product.value!.name
-  toast.success(`${label} agregado al carrito`)
+    ? `${product.value.name} — ${selectedVariant.value.name}`
+    : product.value.name
+
+  toast.success(`${label} agregado`)
 }
 </script>
 

@@ -26,6 +26,13 @@ const router = createRouter({
       component: () => import('../views/ProductView.vue'),
       meta: { public: true },
     },
+    // Agrega esta ruta al array de routes, después de /product/:slug
+    {
+      path: '/cart',
+      name: 'cart',
+      component: () => import('../views/CartView.vue'),
+      meta: { public: true },
+    },
     {
       // Catch-all → redirige al catálogo
       path: '/:pathMatch(.*)*',

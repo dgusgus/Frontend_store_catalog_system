@@ -2,10 +2,12 @@
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../../stores/auth.store'
 import { useToast } from '../../composables/useToast'
+import { useCartStore } from '../../stores/cart.store'
 
 const router = useRouter()
 const auth   = useAuthStore()
 const toast  = useToast()
+const cart = useCartStore()
 
 async function handleLogout() {
   await auth.logout()
@@ -35,7 +37,18 @@ async function handleLogout() {
       >
         {{ auth.isAdmin ? 'Admin' : 'User' }}
       </span>
-
+     <!-- Agrega esto ANTES del bloque del menú de usuario (dropdown) -->
+      <RouterLink to="/cart" class="btn btn-ghost btn-circle">
+        <div class="indicator">
+          <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-1.5 6h11M10 21a1 1 0 100-2 1 1 0 000 2zm7 0a1 1 0 100-2 1 1 0 000 2z" />
+          </svg>
+          <span v-if="cart.itemCount > 0" class="badge badge-primary badge-xs indicator-item">
+            {{ cart.itemCount > 9 ? '9+' : cart.itemCount }}
+          </span>
+        </div>
+      </RouterLink>
       <!-- Menú de usuario -->
       <div v-if="auth.isAuthenticated" class="dropdown dropdown-end">
         <button tabindex="0" class="btn btn-ghost btn-circle">
