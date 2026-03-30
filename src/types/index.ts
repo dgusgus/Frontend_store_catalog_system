@@ -29,7 +29,7 @@ export interface Variant {
   sku: string
   name: string
   stock: number
-  price: number | null  // null = hereda precio del producto
+  price: string | null  // null = hereda precio del producto
 }
 
 export interface ProductImage {
@@ -50,8 +50,8 @@ export interface Product {
   name: string
   slug: string
   description?: string
-  price: number
-  comparePrice?: number
+  price: string
+  comparePrice?: string
   published: boolean
   createdAt: string
   updatedAt: string
