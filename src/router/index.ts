@@ -4,10 +4,7 @@ import { useAuthStore } from '../stores/auth.store'
 const router = createRouter({
   history: createWebHistory(),
   routes: [
-    {
-      path: '/',
-      redirect: '/catalog',
-    },
+    { path: '/', redirect: '/catalog' },
     {
       path: '/login',
       name: 'login',
@@ -26,25 +23,52 @@ const router = createRouter({
       component: () => import('../views/ProductView.vue'),
       meta: { public: true },
     },
-    // Agrega esta ruta al array de routes, después de /product/:slug
     {
       path: '/cart',
       name: 'cart',
       component: () => import('../views/CartView.vue'),
       meta: { public: true },
     },
+    // ── Admin (rutas anidadas) ─────────────────────
     {
-      // Catch-all → redirige al catálogo
-      path: '/:pathMatch(.*)*',
-      redirect: '/catalog',
+      path: '/admin',
+      component: () => import('../views/admin/AdminLayout.vue'),
+      meta: { requiresAdmin: true },
+      redirect: '/admin/products',
+      children: [
+        {
+          path: 'products',
+          name: 'admin-products',
+          component: () => import('../views/admin/AdminProductsView.vue'),
+        },
+        {
+          path: 'discounts',
+          name: 'admin-discounts',
+          component: () => import('../views/admin/AdminDiscountsView.vue'),
+        },
+        {
+          path: 'users',
+          name: 'admin-users',
+          component: () => import('../views/admin/AdminUsersView.vue'),
+        },
+      ],
     },
+    { path: '/:pathMatch(.*)*', redirect: '/catalog' },
   ],
 })
 
-// Guard global — en el futuro protegerá rutas de admin
+// Guard global
 router.beforeEach((to) => {
   const auth = useAuthStore()
-  if (!to.meta.public && !auth.isAuthenticated) {
+
+  // Ruta requiere admin
+  if (to.meta.requiresAdmin) {
+    if (!auth.isAuthenticated) return { name: 'login' }
+    if (!auth.isAdmin)         return { name: 'catalog' }
+  }
+
+  // Ruta privada normal
+  if (!to.meta.public && !to.meta.requiresAdmin && !auth.isAuthenticated) {
     return { name: 'login' }
   }
 })

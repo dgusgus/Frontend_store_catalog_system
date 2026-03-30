@@ -60,10 +60,14 @@ async function handleLogout() {
             </div>
           </div>
         </button>
+       
         <ul
           tabindex="0"
           class="dropdown-content menu bg-base-100 rounded-box z-50 w-48 p-2 shadow-lg border border-base-200 mt-1"
         >
+        <li v-if="auth.isAdmin">
+          <RouterLink to="/admin">Panel admin</RouterLink>
+        </li>
           <li class="menu-title text-xs truncate px-2 py-1">
             {{ auth.user?.email }}
           </li>

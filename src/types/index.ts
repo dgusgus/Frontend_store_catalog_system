@@ -85,6 +85,7 @@ export interface ProductFilters {
   minPrice?: number
   maxPrice?: number
   inStock?: boolean
+  published?: boolean
   page?: number
   limit?: number
   orderBy?: 'price_asc' | 'price_desc' | 'newest' | 'name'
