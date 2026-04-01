@@ -1,5 +1,6 @@
 import { fetcher } from './fetcher'
-import type { Product, PaginatedResponse, ProductFilters } from '../types'
+import type { Product, PaginatedResponse, ProductFilters, Variant, ProductImage } from '../types'
+
 
 export interface CreateProductPayload {
   name:         string
@@ -10,6 +11,27 @@ export interface CreateProductPayload {
   published:    boolean
   categoryId:   number
   tags?:        string[]
+}
+
+// Agrega estas interfaces al archivo existente
+export interface CreateVariantPayload {
+  sku:    string
+  name:   string
+  stock:  number
+  price?: number
+}
+
+export interface UpdateVariantPayload {
+  sku?:   string
+  name?:  string
+  stock?: number
+  price?: number
+}
+
+export interface CreateImagePayload {
+  url:       string
+  alt?:      string
+  position?: number
 }
 
 export type UpdateProductPayload = Partial<CreateProductPayload>
@@ -71,4 +93,51 @@ export const productsApi = {
       auth: true,
     })
   },
+
+  addVariant(productId: number, payload: CreateVariantPayload) {
+  return fetcher<Variant>(`/products/${productId}/variants`, {
+    method: 'POST',
+    auth: true,
+    body: JSON.stringify(payload),
+  })
+},
+
+updateVariant(productId: number, variantId: number, payload: UpdateVariantPayload) {
+  return fetcher<Variant>(`/products/${productId}/variants/${variantId}`, {
+    method: 'PATCH',
+    auth: true,
+    body: JSON.stringify(payload),
+  })
+},
+
+deleteVariant(productId: number, variantId: number) {
+  return fetcher<void>(`/products/${productId}/variants/${variantId}`, {
+    method: 'DELETE',
+    auth: true,
+  })
+},
+
+// ── Imágenes ───────────────────────────────────────
+addImage(productId: number, payload: CreateImagePayload) {
+  return fetcher<ProductImage>(`/products/${productId}/images`, {
+    method: 'POST',
+    auth: true,
+    body: JSON.stringify(payload),
+  })
+},
+
+deleteImage(productId: number, imageId: number) {
+  return fetcher<void>(`/products/${productId}/images/${imageId}`, {
+    method: 'DELETE',
+    auth: true,
+  })
+},
+
+reorderImages(productId: number, imageIds: number[]) {
+  return fetcher<void>(`/products/${productId}/images/reorder`, {
+    method: 'PATCH',
+    auth: true,
+    body: JSON.stringify({ imageIds }),
+  })
+},
 }

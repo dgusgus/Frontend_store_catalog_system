@@ -5,7 +5,7 @@ import { useToast } from '../composables/useToast'
 import AppNavbar from '../components/ui/AppNavbar.vue'
 import CartItemRow from '../components/cart/CartItemRow.vue'
 
-const cart  = useCartStore()
+const cart = useCartStore()
 const toast = useToast()
 
 const couponInput = ref(cart.discountCode)
@@ -45,20 +45,13 @@ function handleClearCart() {
             {{ cart.itemCount }} producto{{ cart.itemCount !== 1 ? 's' : '' }}
           </p>
         </div>
-        <button
-          v-if="!cart.isEmpty"
-          class="btn btn-ghost btn-sm text-error"
-          @click="handleClearCart"
-        >
+        <button v-if="!cart.isEmpty" class="btn btn-ghost btn-sm text-error" @click="handleClearCart">
           Vaciar
         </button>
       </div>
 
       <!-- Carrito vacío -->
-      <div
-        v-if="cart.isEmpty"
-        class="flex flex-col items-center justify-center py-20 gap-4 text-center"
-      >
+      <div v-if="cart.isEmpty" class="flex flex-col items-center justify-center py-20 gap-4 text-center">
         <span class="text-6xl">🛒</span>
         <p class="text-base-content/60">Tu carrito está vacío</p>
         <RouterLink to="/catalog" class="btn btn-primary btn-sm">
@@ -72,11 +65,7 @@ function handleClearCart() {
         <!-- Items -->
         <div class="card bg-base-100 shadow-sm">
           <div class="card-body p-4">
-            <CartItemRow
-              v-for="item in cart.items"
-              :key="`${item.productId}-${item.variantId}`"
-              :item="item"
-            />
+            <CartItemRow v-for="item in cart.items" :key="`${item.productId}-${item.variantId}`" :item="item" />
           </div>
         </div>
 
@@ -94,30 +83,19 @@ function handleClearCart() {
                   −${{ cart.discountResult.discountAmount.toFixed(2) }}
                 </span>
               </div>
-              <button
-                class="btn btn-ghost btn-xs text-error"
-                @click="handleRemoveDiscount"
-              >
+              <button class="btn btn-ghost btn-xs text-error" @click="handleRemoveDiscount">
                 Quitar
               </button>
             </div>
 
             <!-- Input para ingresar código -->
             <div v-else class="flex gap-2">
-              <input
-                v-model="couponInput"
-                type="text"
-                placeholder="VERANO20"
+              <input v-model="couponInput" type="text" placeholder="VERANO20"
                 class="input input-bordered input-sm flex-1 uppercase font-mono tracking-widest"
-                :class="{ 'input-error': cart.discountError }"
-                :disabled="cart.discountLoading"
-                @keyup.enter="handleApplyDiscount"
-              />
-              <button
-                class="btn btn-sm btn-outline"
-                :disabled="!couponInput.trim() || cart.discountLoading"
-                @click="handleApplyDiscount"
-              >
+                :class="{ 'input-error': cart.discountError }" :disabled="cart.discountLoading"
+                @keyup.enter="handleApplyDiscount" />
+              <button class="btn btn-sm btn-outline" :disabled="!couponInput.trim() || cart.discountLoading"
+                @click="handleApplyDiscount">
                 <span v-if="cart.discountLoading" class="loading loading-spinner loading-xs"></span>
                 <span v-else>Aplicar</span>
               </button>
@@ -141,10 +119,7 @@ function handleClearCart() {
               <span>${{ cart.subtotal.toFixed(2) }}</span>
             </div>
 
-            <div
-              v-if="cart.discountAmount > 0"
-              class="flex justify-between text-sm text-success"
-            >
+            <div v-if="cart.discountAmount > 0" class="flex justify-between text-sm text-success">
               <span>Descuento</span>
               <span>−${{ cart.discountAmount.toFixed(2) }}</span>
             </div>
@@ -166,21 +141,25 @@ function handleClearCart() {
     </main>
 
     <!-- Barra fija inferior — checkout -->
-    <div
-      v-if="!cart.isEmpty"
-      class="fixed bottom-0 left-0 right-0 bg-base-100 border-t border-base-200 p-4 z-40"
-    >
+    <div v-if="!cart.isEmpty" class="fixed bottom-0 left-0 right-0 bg-base-100 border-t border-base-200 p-4 z-40">
       <div class="max-w-2xl mx-auto flex gap-3 items-center">
         <div class="flex-1">
           <p class="text-xs text-base-content/50">Total a pagar</p>
           <p class="font-bold text-lg">${{ cart.total.toFixed(2) }}</p>
         </div>
-        <button
-          class="btn btn-primary flex-1"
-          @click="toast.info('Checkout próximamente')"
-        >
-          Finalizar compra
-        </button>
+        <!-- Reemplaza el botón del checkout en la barra fija -->
+        <!-- En la barra fija inferior, reemplaza el botón de checkout -->
+        <div class="flex-1">
+          <p class="text-xs text-base-content/50">Total a pagar</p>
+          <p class="font-bold text-lg">${{ cart.total.toFixed(2) }}</p>
+        </div>
+        <RouterLink to="/checkout" class="btn btn-primary flex-1 gap-2">
+          <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+          </svg>
+          Ver cotización
+        </RouterLink>
       </div>
     </div>
 

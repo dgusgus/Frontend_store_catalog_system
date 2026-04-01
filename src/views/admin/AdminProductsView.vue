@@ -7,11 +7,18 @@ import type { Product } from '../../types'
 import type { CreateProductPayload } from '../../api/products'
 import ProductFormModal from '../../components/admin/ProductFormModal.vue'
 
+import VariantsPanel from '../../components/admin/VariantsPanel.vue'
+import ImagesPanel from '../../components/admin/ImagesPanel.vue'
+
 const store   = useAdminStore()
 const toast   = useToast()
 
 const modalOpen    = ref(false)
 const editProduct  = ref<Product | null>(null)
+
+// Agrega este estado para controlar qué producto está expandido
+const expandedId  = ref<number | null>(null)
+const expandedTab = ref<'variants' | 'images'>('variants')
 
 onMounted(() => store.fetchProducts())
 
@@ -58,6 +65,15 @@ async function togglePublished(product: Product) {
     toast.error(e instanceof ApiRequestError ? e.message : 'Error')
   }
 }
+
+function toggleExpand(productId: number, tab: 'variants' | 'images') {
+  if (expandedId.value === productId && expandedTab.value === tab) {
+    expandedId.value = null
+  } else {
+    expandedId.value  = productId
+    expandedTab.value = tab
+  }
+}
 </script>
 
 <template>
@@ -88,63 +104,61 @@ async function togglePublished(product: Product) {
     </div>
 
     <!-- Tabla de productos -->
-    <div v-else class="flex flex-col gap-2">
-      <div
-        v-for="product in store.products?.items"
-        :key="product.id"
-        class="card bg-base-100 shadow-sm"
-      >
-        <div class="card-body p-3 flex-row items-center gap-3">
+   <div v-for="product in store.products?.items" :key="product.id" class="card bg-base-100 shadow-sm overflow-hidden">
+      <!-- Fila principal -->
+      <div class="card-body p-3 flex-row items-center gap-3">
 
-          <!-- Imagen miniatura -->
-          <div class="size-14 rounded-lg overflow-hidden bg-base-200 shrink-0">
-            <img
-              v-if="product.images[0]"
-              :src="product.images[0].url"
-              :alt="product.name"
-              class="w-full h-full object-cover"
-            />
-            <div v-else class="w-full h-full flex items-center justify-center text-lg">📦</div>
-          </div>
+        <!-- Imagen miniatura -->
+        <div class="size-14 rounded-lg overflow-hidden bg-base-200 shrink-0">
+          <img v-if="product.images[0]" :src="product.images[0].url" :alt="product.name"
+            class="w-full h-full object-cover" />
+          <div v-else class="w-full h-full flex items-center justify-center text-lg">📦</div>
+        </div>
 
-          <!-- Info -->
-          <div class="flex-1 min-w-0">
-            <p class="font-semibold text-sm truncate">{{ product.name }}</p>
-            <p class="text-xs text-base-content/50">
-              ${{ Number(product.price).toFixed(2) }} · {{ product.category.name }}
-            </p>
-            <div class="flex gap-1 mt-1">
-              <span
-                class="badge badge-xs"
-                :class="product.published ? 'badge-success' : 'badge-ghost'"
-              >
-                {{ product.published ? 'Publicado' : 'Borrador' }}
-              </span>
-              <span class="badge badge-xs badge-ghost">
-                {{ product.variants.length }} variante{{ product.variants.length !== 1 ? 's' : '' }}
-              </span>
-            </div>
-          </div>
-
-          <!-- Acciones -->
-          <div class="flex flex-col gap-1 shrink-0">
-            <button
-              class="btn btn-xs btn-ghost"
-              @click="togglePublished(product)"
-              :title="product.published ? 'Pasar a borrador' : 'Publicar'"
-            >
-              {{ product.published ? '📤' : '📥' }}
+        <!-- Info -->
+        <div class="flex-1 min-w-0">
+          <p class="font-semibold text-sm truncate">{{ product.name }}</p>
+          <p class="text-xs text-base-content/50">
+            ${{ Number(product.price).toFixed(2) }} · {{ product.category.name }}
+          </p>
+          <!-- Botones expandir -->
+          <div class="flex gap-1 mt-1">
+            <button class="badge badge-xs cursor-pointer transition-colors" :class="expandedId === product.id && expandedTab === 'variants'
+              ? 'badge-primary'
+              : 'badge-ghost hover:badge-primary'" @click="toggleExpand(product.id, 'variants')">
+              {{ product.variants.length }} variante{{ product.variants.length !== 1 ? 's' : '' }}
             </button>
-            <button class="btn btn-xs btn-ghost" @click="openEdit(product)" title="Editar">
-              ✏️
+            <button class="badge badge-xs cursor-pointer transition-colors" :class="expandedId === product.id && expandedTab === 'images'
+              ? 'badge-secondary'
+              : 'badge-ghost hover:badge-secondary'" @click="toggleExpand(product.id, 'images')">
+              {{ product.images.length }} imagen{{ product.images.length !== 1 ? 'es' : '' }}
             </button>
-            <button class="btn btn-xs btn-ghost text-error" @click="handleDelete(product)" title="Eliminar">
-              🗑️
-            </button>
+            <span class="badge badge-xs" :class="product.published ? 'badge-success' : 'badge-ghost'">
+              {{ product.published ? 'Publicado' : 'Borrador' }}
+            </span>
           </div>
+        </div>
 
+        <!-- Acciones -->
+        <div class="flex flex-col gap-1 shrink-0">
+          <button class="btn btn-xs btn-ghost" @click="togglePublished(product)" title="Cambiar estado">
+            {{ product.published ? '📤' : '📥' }}
+          </button>
+          <button class="btn btn-xs btn-ghost" @click="openEdit(product)" title="Editar">✏️</button>
+          <button class="btn btn-xs btn-ghost text-error" @click="handleDelete(product)" title="Eliminar">🗑️</button>
         </div>
       </div>
+
+      <!-- Panel expandible -->
+      <Transition name="expand">
+        <div v-if="expandedId === product.id" class="border-t border-base-200 bg-base-50 p-3">
+          <p class="text-xs font-semibold text-base-content/50 uppercase tracking-wide mb-2">
+            {{ expandedTab === 'variants' ? 'Variantes' : 'Imágenes' }}
+          </p>
+          <VariantsPanel v-if="expandedTab === 'variants'" :product="product" />
+          <ImagesPanel v-else :product="product" />
+        </div>
+      </Transition>
     </div>
 
     <!-- Paginación -->
@@ -177,3 +191,21 @@ async function togglePublished(product: Product) {
     @saved="handleSaved"
   />
 </template>
+
+<style scoped>
+.expand-enter-active,
+.expand-leave-active {
+  transition: all 0.2s ease;
+  overflow: hidden;
+}
+.expand-enter-from,
+.expand-leave-to {
+  max-height: 0;
+  opacity: 0;
+}
+.expand-enter-to,
+.expand-leave-from {
+  max-height: 600px;
+  opacity: 1;
+}
+</style>

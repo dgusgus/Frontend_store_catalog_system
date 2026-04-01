@@ -54,6 +54,12 @@ const router = createRouter({
       ],
     },
     { path: '/:pathMatch(.*)*', redirect: '/catalog' },
+    {
+      path: '/checkout',
+      name: 'checkout',
+      component: () => import('../views/CheckoutView.vue'),
+      meta: { public: true },
+    },
   ],
 })
 

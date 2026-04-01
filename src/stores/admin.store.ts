@@ -7,6 +7,9 @@ import type { Product, AuthUser, PaginatedResponse } from '../types'
 import type { Discount, CreateDiscountPayload } from '../api/discounts'
 import type { CreateProductPayload, UpdateProductPayload } from '../api/products'
 
+import type { CreateVariantPayload, UpdateVariantPayload, CreateImagePayload } from '../api/products'
+import type { Variant, ProductImage } from '../types'
+
 export const useAdminStore = defineStore('admin', () => {
 
   // ── Products ───────────────────────────────────────
@@ -49,7 +52,68 @@ export const useAdminStore = defineStore('admin', () => {
       products.value.pagination.total--
     }
   }
+  // ── Variants ───────────────────────────────────────
+  async function addVariant(productId: number, payload: CreateVariantPayload): Promise<Variant> {
+    const variant = await productsApi.addVariant(productId, payload)
+    // Actualiza la lista local del producto
+    if (products.value) {
+      const product = products.value.items.find(p => p.id === productId)
+      if (product) product.variants.push(variant)
+    }
+    return variant
+  }
 
+  async function updateVariant(productId: number, variantId: number, payload: UpdateVariantPayload): Promise<Variant> {
+    const updated = await productsApi.updateVariant(productId, variantId, payload)
+    if (products.value) {
+      const product = products.value.items.find(p => p.id === productId)
+      if (product) {
+        const idx = product.variants.findIndex(v => v.id === variantId)
+        if (idx >= 0) product.variants[idx] = updated
+      }
+    }
+    return updated
+  }
+
+  async function deleteVariant(productId: number, variantId: number): Promise<void> {
+    await productsApi.deleteVariant(productId, variantId)
+    if (products.value) {
+      const product = products.value.items.find(p => p.id === productId)
+      if (product) product.variants = product.variants.filter(v => v.id !== variantId)
+    }
+  }
+
+  // ── Images ─────────────────────────────────────────
+  async function addImage(productId: number, payload: CreateImagePayload): Promise<ProductImage> {
+    const image = await productsApi.addImage(productId, payload)
+    if (products.value) {
+      const product = products.value.items.find(p => p.id === productId)
+      if (product) product.images.push(image)
+    }
+    return image
+  }
+
+  async function deleteImage(productId: number, imageId: number): Promise<void> {
+    await productsApi.deleteImage(productId, imageId)
+    if (products.value) {
+      const product = products.value.items.find(p => p.id === productId)
+      if (product) product.images = product.images.filter(i => i.id !== imageId)
+    }
+  }
+
+  async function reorderImages(productId: number, imageIds: number[]): Promise<void> {
+    await productsApi.reorderImages(productId, imageIds)
+    if (products.value) {
+      const product = products.value.items.find(p => p.id === productId)
+      if (product) {
+        // Reordena localmente según el nuevo array de ids
+        product.images = imageIds
+          .map(id => product.images.find(img => img.id === id)!)
+          .filter(Boolean)
+          .map((img, i) => ({ ...img, position: i }))
+      }
+    }
+  }
   // ── Discounts ──────────────────────────────────────
   const discounts        = ref<Discount[]>([])
   const discountsLoading = ref(false)
@@ -117,5 +181,9 @@ export const useAdminStore = defineStore('admin', () => {
     // users
     users, usersLoading, usersError,
     fetchUsers, changeUserRole,
+    // variants
+    addVariant, updateVariant, deleteVariant,
+    // images
+    addImage, deleteImage, reorderImages,
   }
 })
