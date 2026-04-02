@@ -2,13 +2,21 @@
 import { ref, computed } from 'vue'
 import type { ProductImage } from '../../types'
 
+import { cloudinaryUrl } from '../../api/cloudinary'
+
 const props = defineProps<{ images: ProductImage[]; name: string }>()
 
 const activeIndex = ref(0)
 
-const activeImage = computed(() =>
+/* const activeImage = computed(() =>
   props.images[activeIndex.value]?.url ??
   `https://placehold.co/600x600/f3f4f6/9ca3af?text=${encodeURIComponent(props.name)}`
+) */
+
+const activeImage = computed(() =>
+  props.images[activeIndex.value]?.url
+    ? cloudinaryUrl(props.images[activeIndex.value].url, { width: 600, height: 600 })
+    : `https://placehold.co/600x600/f3f4f6/9ca3af?text=${encodeURIComponent(props.name)}`
 )
 
 const activeAlt = computed(() =>

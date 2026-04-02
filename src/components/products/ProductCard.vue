@@ -2,12 +2,20 @@
 import { computed } from 'vue'
 import type { Product } from '../../types'
 import { formatPrice, toNumber } from '../../utils/format'
+// En el computed de mainImage
+import { cloudinaryUrl } from '../../api/cloudinary'
 
 const props = defineProps<{ product: Product }>()
 
-const mainImage = computed(() =>
+/* const mainImage = computed(() =>
   props.product.images[0]?.url ??
   `https://placehold.co/400x400/f3f4f6/9ca3af?text=${encodeURIComponent(props.product.name)}`
+) */
+
+const mainImage = computed(() =>
+  props.product.images[0]?.url
+    ? cloudinaryUrl(props.product.images[0].url, { width: 400, height: 400 })
+    : `https://placehold.co/400x400/f3f4f6/9ca3af?text=${encodeURIComponent(props.product.name)}`
 )
 
 const discountPercent = computed(() => {
