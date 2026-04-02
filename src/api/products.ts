@@ -32,6 +32,7 @@ export interface CreateImagePayload {
   url:       string
   alt?:      string
   position?: number
+  publicId?: string
 }
 
 export type UpdateProductPayload = Partial<CreateProductPayload>

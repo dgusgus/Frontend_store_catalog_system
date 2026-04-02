@@ -1,3 +1,4 @@
+<!-- src/components/admin/ImagesPanel.vue -->
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useAdminStore } from '../../stores/admin.store'
@@ -12,11 +13,13 @@ const toast = useToast()
 
 const showUploader = ref(false)
 
-// Se llama cuando Cloudinary devuelve la URL
-async function handleUploaded(url: string) {
+// ← Ahora recibe AMBOS: url y publicId
+// El publicId se guarda en la DB para poder borrar de Cloudinary después
+async function handleUploaded(url: string, publicId: string) {
   try {
     await store.addImage(props.product.id, {
       url,
+      publicId,  // ← NUEVO: se envía al backend
       position: props.product.images.length,
     })
     toast.success('Imagen agregada al producto')
@@ -27,7 +30,7 @@ async function handleUploaded(url: string) {
 }
 
 async function handleDelete(imageId: number) {
-  if (!confirm('¿Eliminar esta imagen?')) return
+  if (!confirm('¿Eliminar esta imagen? Se borrará también de Cloudinary.')) return
   try {
     await store.deleteImage(props.product.id, imageId)
     toast.success('Imagen eliminada')
@@ -52,7 +55,6 @@ async function move(index: number, direction: -1 | 1) {
 <template>
   <div class="flex flex-col gap-3">
 
-    <!-- Grid de imágenes actuales -->
     <div v-if="product.images.length > 0" class="grid grid-cols-3 gap-2">
       <div
         v-for="(image, index) in product.images"
@@ -61,12 +63,19 @@ async function move(index: number, direction: -1 | 1) {
       >
         <img :src="image.url" :alt="image.alt ?? ''" class="w-full h-full object-cover" />
 
-        <!-- Badge posición -->
         <span class="absolute top-1 left-1 badge badge-xs badge-neutral">
           {{ index === 0 ? 'Principal' : `#${index + 1}` }}
         </span>
 
-        <!-- Controles overlay -->
+        <!-- Badge que indica si tiene publicId (útil para detectar imágenes legacy) -->
+        <span
+          v-if="!image.publicId"
+          class="absolute top-1 right-1 badge badge-xs badge-warning"
+          title="Esta imagen no tiene publicId — no se borrará de Cloudinary al eliminar"
+        >
+          legacy
+        </span>
+
         <div class="absolute inset-0 bg-base-300/70 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1">
           <div class="flex gap-1">
             <button
@@ -92,9 +101,9 @@ async function move(index: number, direction: -1 | 1) {
       Sin imágenes
     </p>
 
-    <!-- Uploader expandible -->
     <div v-if="showUploader">
-      <ImageUploader @uploaded="(url) => handleUploaded(url)" />
+      <!-- ImageUploader ya emite (url, publicId) — no hay que cambiarlo -->
+      <ImageUploader @uploaded="(url, publicId) => handleUploaded(url, publicId)" />
       <button
         class="btn btn-ghost btn-xs w-full mt-2"
         @click="showUploader = false"

@@ -37,6 +37,7 @@ export interface ProductImage {
   url: string
   alt?: string
   position: number
+  publicId?: string
 }
 
 export interface Tag {
