@@ -54,8 +54,16 @@ async function handleLogout() {
             class="tab"
             :class="$route.path.startsWith('/admin/products') ? 'tab-active' : ''"
           >
-            Productos
-          </RouterLink>
+          Productos
+        </RouterLink>
+        <RouterLink
+          to="/admin/categories"
+          role="tab"
+          class="tab"
+          :class="$route.path.startsWith('/admin/categories') ? 'tab-active' : ''"
+        >
+          Categorías
+        </RouterLink>
           <RouterLink
             to="/admin/discounts"
             role="tab"

@@ -3,12 +3,16 @@ import { ref } from 'vue'
 import { productsApi } from '../api/products'
 import { discountsApi } from '../api/discounts'
 import { adminApi } from '../api/admin'
-import type { Product, AuthUser, PaginatedResponse } from '../types'
+import type { Product, AuthUser, PaginatedResponse, Category } from '../types'
 import type { Discount, CreateDiscountPayload } from '../api/discounts'
 import type { CreateProductPayload, UpdateProductPayload } from '../api/products'
 
 import type { CreateVariantPayload, UpdateVariantPayload, CreateImagePayload } from '../api/products'
 import type { Variant, ProductImage } from '../types'
+
+import { categoriesApi } from '../api/categories'
+import type { CreateCategoryPayload, UpdateCategoryPayload } from '../api/categories'
+
 
 export const useAdminStore = defineStore('admin', () => {
 
@@ -171,6 +175,70 @@ export const useAdminStore = defineStore('admin', () => {
     if (idx >= 0) users.value[idx] = updated
   }
 
+  // ── Categories ─────────────────────────────────────
+  const categories = ref<Category[]>([])
+  const categoriesLoading = ref(false)
+  const categoriesError = ref<string | null>(null)
+
+  async function fetchCategories() {
+    categoriesLoading.value = true
+    categoriesError.value = null
+    try {
+      categories.value = await categoriesApi.getAll()
+    } catch (e) {
+      categoriesError.value = e instanceof Error ? e.message : 'Error al cargar categorías'
+    } finally {
+      categoriesLoading.value = false
+    }
+  }
+
+  async function createCategory(payload: CreateCategoryPayload) {
+    const created = await categoriesApi.create(payload)
+    // Inserta en la lista local según si es raíz o hijo
+    if (!payload.parentId) {
+      categories.value.push({ ...created, children: [] })
+    } else {
+      const parent = categories.value.find(c => c.id === payload.parentId)
+      if (parent) parent.children.push({ id: created.id, name: created.name, slug: created.slug })
+    }
+    return created
+  }
+
+  async function updateCategory(id: number, payload: UpdateCategoryPayload) {
+    const updated = await categoriesApi.update(id, payload)
+    // Actualiza en raíz
+    const rootIdx = categories.value.findIndex(c => c.id === id)
+    if (rootIdx >= 0) {
+      categories.value[rootIdx] = { ...categories.value[rootIdx], ...updated }
+      return updated
+    }
+    // Actualiza en hijos
+    for (const parent of categories.value) {
+      const childIdx = parent.children.findIndex(c => c.id === id)
+      if (childIdx >= 0) {
+        parent.children[childIdx] = { id: updated.id, name: updated.name, slug: updated.slug }
+        break
+      }
+    }
+    return updated
+  }
+
+  async function deleteCategory(id: number) {
+    await categoriesApi.delete(id)
+    // Elimina de raíz o de hijos
+    const rootIdx = categories.value.findIndex(c => c.id === id)
+    if (rootIdx >= 0) {
+      categories.value.splice(rootIdx, 1)
+      return
+    }
+    for (const parent of categories.value) {
+      const childIdx = parent.children.findIndex(c => c.id === id)
+      if (childIdx >= 0) {
+        parent.children.splice(childIdx, 1)
+        break
+      }
+    }
+  }
   return {
     // products
     products, productsLoading, productsError,
@@ -185,5 +253,8 @@ export const useAdminStore = defineStore('admin', () => {
     addVariant, updateVariant, deleteVariant,
     // images
     addImage, deleteImage, reorderImages,
+    // categories
+    categories, categoriesLoading, categoriesError,
+    fetchCategories, createCategory, updateCategory, deleteCategory,
   }
 })

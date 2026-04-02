@@ -4,6 +4,8 @@ import { categoriesApi } from '../../api/categories'
 import type { Product, Category } from '../../types'
 import type { CreateProductPayload } from '../../api/products'
 
+import { useAdminStore } from '../../stores/admin.store'
+
 const props = defineProps<{
   open:     boolean
   product?: Product | null   // null = crear, Product = editar
@@ -34,7 +36,7 @@ const isEdit = computed(() => !!props.product)
 // Rellena el form al abrir en modo edición
 watch(() => props.open, async (val) => {
   if (!val) return
-  categories.value = await categoriesApi.getAll().catch(() => [])
+  const adminStore = useAdminStore()
 
   if (props.product) {
     form.value = {
@@ -54,6 +56,11 @@ watch(() => props.open, async (val) => {
       categoryId: 0, tags: '',
     }
   }
+  // Asegura que las categorías estén cargadas para el selector
+  if (adminStore.categories.length === 0) {
+    await adminStore.fetchCategories()
+  }
+  categories.value = adminStore.categories
 })
 
 // Auto-genera slug desde el nombre (solo en modo crear)
