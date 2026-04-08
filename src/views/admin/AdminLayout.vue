@@ -80,6 +80,14 @@ async function handleLogout() {
           >
             Usuarios
           </RouterLink>
+          <RouterLink
+            to="/admin/settings"
+            role="tab"
+            class="tab"
+            :class="$route.path.startsWith('/admin/settings') ? 'tab-active' : ''"
+          >
+            ⚙️ Configuración
+          </RouterLink>
         </div>
       </div>
     </div>

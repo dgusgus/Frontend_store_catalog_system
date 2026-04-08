@@ -56,6 +56,11 @@ const router = createRouter({
           name: 'admin-users',
           component: () => import('../views/admin/AdminUsersView.vue'),
         },
+        {
+          path: 'settings',
+          name: 'admin-settings',
+          component: () => import('../views/admin/AdminSettingsView.vue'),
+        },
       ],
     },
     { path: '/:pathMatch(.*)*', redirect: '/catalog' },
