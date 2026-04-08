@@ -1,89 +1,72 @@
 // src/composables/useWhatsApp.ts
+//
+// FIX: el mensaje se arma desde los datos de la Order devuelta por el backend,
+// no desde cart.items. Así funciona aunque el carrito ya esté limpio.
 
-import { useCartStore }     from '../stores/cart.store'
 import { useSettingsStore } from '../stores/settings.store'
-
-export interface CustomerData {
-  name:  string
-  phone: string
-}
+import type { Order }       from '../api/orders'
 
 export type WhatsAppTarget = 'app' | 'web'
 
 export function useWhatsApp() {
-  const cart     = useCartStore()
   const settings = useSettingsStore()
 
-  function buildMessage(customer: CustomerData, orderNumber: string | null): string {
+  // Arma el mensaje a partir de la orden ya creada en el backend
+  function buildMessageFromOrder(order: Order): string {
     const lines: string[] = []
 
     lines.push('🛍️ *NUEVO PEDIDO*')
-    if (orderNumber) {
-      lines.push(`📋 *${orderNumber}*`)
-    }
+    lines.push(`📋 *${order.orderNumber}*`)
     lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
 
     lines.push('\n👤 *Cliente*')
-    lines.push(`   Nombre:    ${customer.name}`)
-    lines.push(`   Teléfono:  ${customer.phone}`)
+    lines.push(`   Nombre:    ${order.customerName}`)
+    lines.push(`   Teléfono:  ${order.customerPhone}`)
 
     lines.push('\n🛒 *Productos*')
     lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
 
-    cart.items.forEach(item => {
+    // Usamos order.items — ya están guardados en la DB con sus snapshots
+    order.items.forEach(item => {
       const variant  = item.variantName ? ` _(${item.variantName})_` : ''
-      const subtotal = (item.price * item.quantity).toFixed(2)
+      const subtotal = Number(item.subtotal).toFixed(2)
       lines.push(`\n• *${item.productName}*${variant}`)
-      lines.push(`  ${item.quantity} × $${item.price.toFixed(2)} = *$${subtotal}*`)
+      lines.push(`  ${item.quantity} × $${Number(item.unitPrice).toFixed(2)} = *$${subtotal}*`)
     })
 
     lines.push('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
 
-    if (cart.discountResult) {
-      lines.push(`Subtotal:                    $${cart.subtotal.toFixed(2)}`)
-      lines.push(`Descuento (${cart.discountResult.code}): -$${cart.discountAmount.toFixed(2)}`)
-      lines.push(`\n💰 *TOTAL: $${cart.total.toFixed(2)}*`)
-      lines.push(`   _(ahorraste $${cart.discountAmount.toFixed(2)})_`)
+    if (Number(order.discountAmount) > 0) {
+      lines.push(`Subtotal:                    $${Number(order.subtotal).toFixed(2)}`)
+      lines.push(`Descuento (${order.discountCode}): -$${Number(order.discountAmount).toFixed(2)}`)
+      lines.push(`\n💰 *TOTAL: $${Number(order.total).toFixed(2)}*`)
+      lines.push(`   _(ahorraste $${Number(order.discountAmount).toFixed(2)})_`)
     } else {
-      lines.push(`\n💰 *TOTAL: $${cart.total.toFixed(2)}*`)
+      lines.push(`\n💰 *TOTAL: $${Number(order.total).toFixed(2)}*`)
     }
 
     lines.push('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-    if (orderNumber) {
-      lines.push(`_Para confirmar buscá el pedido *${orderNumber}* en el sistema_ 🏪`)
-    } else {
-      lines.push('_Enviado desde la tienda online_ 🏪')
-    }
+    lines.push(`_Confirmá el pedido *${order.orderNumber}* en el sistema_ 🏪`)
 
     return lines.join('\n')
   }
 
-  function buildUrl(
-    customer: CustomerData,
-    target: WhatsAppTarget,
-    orderNumber: string | null
-  ): string {
+  function openWhatsApp(order: Order, target: WhatsAppTarget = 'app'): void {
     const number  = settings.whatsappNumber
-    const message = buildMessage(customer, orderNumber)
+    if (!number) return
+
+    const message = buildMessageFromOrder(order)
     const encoded = encodeURIComponent(message)
 
-    if (target === 'web') {
-      return `https://web.whatsapp.com/send?phone=${number}&text=${encoded}`
-    }
-    return `https://wa.me/${number}?text=${encoded}`
-  }
+    const url = target === 'web'
+      ? `https://web.whatsapp.com/send?phone=${number}&text=${encoded}`
+      : `https://wa.me/${number}?text=${encoded}`
 
-  function openWhatsApp(
-    customer: CustomerData,
-    target: WhatsAppTarget,
-    orderNumber: string | null = null
-  ): void {
-    const url = buildUrl(customer, target, orderNumber)
     window.open(url, '_blank', 'noopener,noreferrer')
   }
 
   return {
-    buildMessage,
+    buildMessageFromOrder,
     openWhatsApp,
     hasWhatsapp: settings.hasWhatsapp,
   }

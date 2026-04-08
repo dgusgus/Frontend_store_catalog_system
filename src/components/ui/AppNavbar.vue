@@ -37,6 +37,17 @@ async function handleLogout() {
     Admin
   </span>
 
+     <!-- Mis pedidos — solo usuarios autenticados -->
+      <RouterLink v-if="auth.isAuthenticated" to="/my-orders" class="btn btn-ghost btn-sm gap-1 hidden sm:flex">
+        <svg xmlns="http://www.w3.org/2000/svg" class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+        </svg>
+        Mis pedidos
+      </RouterLink>
+
+
+
   <!-- Carrito — siempre visible -->
   <RouterLink to="/cart" class="btn btn-ghost btn-circle">
     <div class="indicator">
@@ -74,6 +85,9 @@ async function handleLogout() {
       </li>
       <li v-if="auth.isAdmin">
         <RouterLink to="/admin">Panel admin</RouterLink>
+      </li>
+      <li>
+        <RouterLink to="/my-orders">Mis pedidos</RouterLink>
       </li>
       <li>
         <button @click="handleLogout">Cerrar sesión</button>

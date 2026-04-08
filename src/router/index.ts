@@ -29,6 +29,12 @@ const router = createRouter({
       component: () => import('../views/CartView.vue'),
       meta: { public: true },
     },
+    {
+      path: '/my-orders',
+      name: 'my-orders',
+      component: () => import('../views/MyOrdersView.vue'),
+      meta: { public: false },  // requiere login
+    },
     // ── Admin (rutas anidadas) ─────────────────────
     {
       path: '/admin',
