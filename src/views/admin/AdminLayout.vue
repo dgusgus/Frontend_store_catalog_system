@@ -2,16 +2,21 @@
 import { useAuthStore } from '../../stores/auth.store'
 import { useRouter } from 'vue-router'
 import { useToast } from '../../composables/useToast'
+import { useOrdersStore } from '../../stores/orders.store'
+import { onMounted } from 'vue'
 
-const auth   = useAuthStore()
+const auth = useAuthStore()
 const router = useRouter()
-const toast  = useToast()
+const toast = useToast()
+const ordersStore = useOrdersStore()
 
 async function handleLogout() {
   await auth.logout()
   toast.info('Sesión cerrada')
   router.push('/login')
 }
+
+onMounted(() => ordersStore.fetchOrders())
 </script>
 
 <template>
@@ -22,7 +27,7 @@ async function handleLogout() {
       <div class="navbar-start">
         <RouterLink to="/catalog" class="btn btn-ghost btn-sm gap-1">
           <svg xmlns="http://www.w3.org/2000/svg" class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
           </svg>
           Tienda
         </RouterLink>
@@ -48,44 +53,34 @@ async function handleLogout() {
     <div class="bg-base-100 border-b border-base-200">
       <div class="max-w-4xl mx-auto px-4">
         <div role="tablist" class="tabs tabs-bordered">
-          <RouterLink
-            to="/admin/products"
-            role="tab"
-            class="tab"
-            :class="$route.path.startsWith('/admin/products') ? 'tab-active' : ''"
-          >
-          Productos
-        </RouterLink>
-        <RouterLink
-          to="/admin/categories"
-          role="tab"
-          class="tab"
-          :class="$route.path.startsWith('/admin/categories') ? 'tab-active' : ''"
-        >
-          Categorías
-        </RouterLink>
-          <RouterLink
-            to="/admin/discounts"
-            role="tab"
-            class="tab"
-            :class="$route.path.startsWith('/admin/discounts') ? 'tab-active' : ''"
-          >
+
+          <RouterLink to="/admin/orders" role="tab" class="tab"
+            :class="$route.path.startsWith('/admin/orders') ? 'tab-active' : ''">
+            Pedidos
+            <!-- Badge de pendientes — importar useOrdersStore en el script -->
+            <span v-if="ordersStore.pendingCount > 0" class="badge badge-warning badge-xs ml-1">
+              {{ ordersStore.pendingCount }}
+            </span>
+          </RouterLink>
+
+          <RouterLink to="/admin/products" role="tab" class="tab"
+            :class="$route.path.startsWith('/admin/products') ? 'tab-active' : ''">
+            Productos
+          </RouterLink>
+          <RouterLink to="/admin/categories" role="tab" class="tab"
+            :class="$route.path.startsWith('/admin/categories') ? 'tab-active' : ''">
+            Categorías
+          </RouterLink>
+          <RouterLink to="/admin/discounts" role="tab" class="tab"
+            :class="$route.path.startsWith('/admin/discounts') ? 'tab-active' : ''">
             Descuentos
           </RouterLink>
-          <RouterLink
-            to="/admin/users"
-            role="tab"
-            class="tab"
-            :class="$route.path.startsWith('/admin/users') ? 'tab-active' : ''"
-          >
+          <RouterLink to="/admin/users" role="tab" class="tab"
+            :class="$route.path.startsWith('/admin/users') ? 'tab-active' : ''">
             Usuarios
           </RouterLink>
-          <RouterLink
-            to="/admin/settings"
-            role="tab"
-            class="tab"
-            :class="$route.path.startsWith('/admin/settings') ? 'tab-active' : ''"
-          >
+          <RouterLink to="/admin/settings" role="tab" class="tab"
+            :class="$route.path.startsWith('/admin/settings') ? 'tab-active' : ''">
             ⚙️ Configuración
           </RouterLink>
         </div>

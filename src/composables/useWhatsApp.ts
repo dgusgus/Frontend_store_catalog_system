@@ -14,19 +14,19 @@ export function useWhatsApp() {
   const cart     = useCartStore()
   const settings = useSettingsStore()
 
-  // ── Construcción del mensaje ─────────────────────────────
-  function buildMessage(customer: CustomerData): string {
+  function buildMessage(customer: CustomerData, orderNumber: string | null): string {
     const lines: string[] = []
 
     lines.push('🛍️ *NUEVO PEDIDO*')
+    if (orderNumber) {
+      lines.push(`📋 *${orderNumber}*`)
+    }
     lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
 
-    // Datos del cliente
     lines.push('\n👤 *Cliente*')
     lines.push(`   Nombre:    ${customer.name}`)
     lines.push(`   Teléfono:  ${customer.phone}`)
 
-    // Productos
     lines.push('\n🛒 *Productos*')
     lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
 
@@ -37,7 +37,6 @@ export function useWhatsApp() {
       lines.push(`  ${item.quantity} × $${item.price.toFixed(2)} = *$${subtotal}*`)
     })
 
-    // Totales
     lines.push('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
 
     if (cart.discountResult) {
@@ -50,29 +49,36 @@ export function useWhatsApp() {
     }
 
     lines.push('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-    lines.push('_Enviado desde la tienda online_ 🏪')
+    if (orderNumber) {
+      lines.push(`_Para confirmar buscá el pedido *${orderNumber}* en el sistema_ 🏪`)
+    } else {
+      lines.push('_Enviado desde la tienda online_ 🏪')
+    }
 
     return lines.join('\n')
   }
 
-  // ── URLs según destino elegido por el usuario ─────────────
-  function buildUrl(customer: CustomerData, target: WhatsAppTarget): string {
+  function buildUrl(
+    customer: CustomerData,
+    target: WhatsAppTarget,
+    orderNumber: string | null
+  ): string {
     const number  = settings.whatsappNumber
-    const message = buildMessage(customer)
+    const message = buildMessage(customer, orderNumber)
     const encoded = encodeURIComponent(message)
 
     if (target === 'web') {
-      // Abre directamente WhatsApp Web en el navegador
       return `https://web.whatsapp.com/send?phone=${number}&text=${encoded}`
     }
-
-    // wa.me detecta automáticamente el dispositivo:
-    // móvil → abre la app, desktop → ofrece la app de escritorio o WhatsApp Web
     return `https://wa.me/${number}?text=${encoded}`
   }
 
-  function openWhatsApp(customer: CustomerData, target: WhatsAppTarget): void {
-    const url = buildUrl(customer, target)
+  function openWhatsApp(
+    customer: CustomerData,
+    target: WhatsAppTarget,
+    orderNumber: string | null = null
+  ): void {
+    const url = buildUrl(customer, target, orderNumber)
     window.open(url, '_blank', 'noopener,noreferrer')
   }
 

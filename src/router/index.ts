@@ -4,7 +4,7 @@ import { useAuthStore } from '../stores/auth.store'
 const router = createRouter({
   history: createWebHistory(),
   routes: [
-    { path: '/', redirect: '/catalog' },
+    { path: '/', redirect: '/admin/orders' },
     {
       path: '/login',
       name: 'login',
@@ -40,6 +40,11 @@ const router = createRouter({
           path: 'products',
           name: 'admin-products',
           component: () => import('../views/admin/AdminProductsView.vue'),
+        },
+        {
+          path: 'orders',
+          name: 'admin-orders',
+          component: () => import('../views/admin/AdminOrdersView.vue'),
         },
         {
           path: 'categories',
