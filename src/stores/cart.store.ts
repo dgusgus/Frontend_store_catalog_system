@@ -1,18 +1,18 @@
+// src/stores/cart.store.ts
+// Cambios: addItem y updateQuantity validan stock contra la API
+
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { discountsApi } from '../api/discounts'
+import { productsApi }  from '../api/products'
 import { ApiRequestError } from '../api/fetcher'
 import type { CartItem, DiscountResult, Product, Variant } from '../types'
 
 const STORAGE_KEY = 'cart'
 
-// Persiste y recupera el carrito en localStorage
 function loadFromStorage(): CartItem[] {
-  try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '[]')
-  } catch {
-    return []
-  }
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '[]') }
+  catch { return [] }
 }
 
 function saveToStorage(items: CartItem[]) {
@@ -21,51 +21,61 @@ function saveToStorage(items: CartItem[]) {
 
 export const useCartStore = defineStore('cart', () => {
 
-  // ── State ──────────────────────────────────────────
   const items           = ref<CartItem[]>(loadFromStorage())
   const discountCode    = ref<string>('')
   const discountResult  = ref<DiscountResult | null>(null)
   const discountLoading = ref(false)
   const discountError   = ref<string | null>(null)
 
-  // ── Getters ────────────────────────────────────────
+  // ── Getters ────────────────────────────────────────────────
   const itemCount = computed(() =>
     items.value.reduce((sum, i) => sum + i.quantity, 0)
   )
-
   const subtotal = computed(() =>
     items.value.reduce((sum, i) => sum + i.price * i.quantity, 0)
   )
-
-  const discountAmount = computed(() =>
-    discountResult.value?.discountAmount ?? 0
-  )
-
-  const total = computed(() =>
-    Math.max(0, subtotal.value - discountAmount.value)
-  )
-
+  const discountAmount = computed(() => discountResult.value?.discountAmount ?? 0)
+  const total = computed(() => Math.max(0, subtotal.value - discountAmount.value))
   const isEmpty = computed(() => items.value.length === 0)
 
-  // ── Helpers internos ───────────────────────────────
+  // ── Helpers ────────────────────────────────────────────────
   function findIndex(productId: number, variantId?: number): number {
     return items.value.findIndex(
       i => i.productId === productId && i.variantId === variantId
     )
   }
 
-  function persist() {
-    saveToStorage(items.value)
-  }
+  function persist() { saveToStorage(items.value) }
 
-  // ── Actions ────────────────────────────────────────
-  function addItem(product: Product, variant: Variant | null = null) {
+  // ── addItem con validación de stock ───────────────────────
+  // Devuelve un objeto con success y mensaje de error opcional
+  async function addItem(
+    product: Product,
+    variant: Variant | null = null
+  ): Promise<{ success: boolean; error?: string }> {
+
+    const idx = findIndex(product.id, variant?.id)
+    const currentQty = idx >= 0 ? items.value[idx].quantity : 0
+    const newQty     = currentQty + 1
+
+    // Verificar stock disponible
+    if (variant) {
+      // Refrescar stock desde la API para tener el valor actualizado
+      const freshVariant = await getFreshVariantStock(product.slug, variant.id)
+      if (freshVariant !== null && freshVariant < newQty) {
+        return {
+          success: false,
+          error: freshVariant === 0
+            ? `Sin stock disponible para ${variant.name}`
+            : `Solo quedan ${freshVariant} unidades de ${variant.name}`,
+        }
+      }
+    }
+
     const price = variant?.price ?? product.price
-    const idx   = findIndex(product.id, variant?.id)
 
     if (idx >= 0) {
-      // Ya existe → incrementar cantidad
-      items.value[idx].quantity++
+      items.value[idx].quantity = newQty
     } else {
       items.value.push({
         productId:   product.id,
@@ -74,15 +84,34 @@ export const useCartStore = defineStore('cart', () => {
         image:       product.images[0]?.url,
         variantId:   variant?.id,
         variantName: variant?.name,
+        // Guardamos el stock máximo para validar incrementos sin API
+        maxStock:    variant?.stock ?? 9999,
         price:       Number(price),
-        quantity: 1,
+        quantity:    1,
       })
     }
 
     persist()
-    // Si ya había un descuento aplicado, revalidar con el nuevo subtotal
+
     if (discountResult.value) {
       void applyDiscount(discountCode.value)
+    }
+
+    return { success: true }
+  }
+
+  // Obtiene el stock actualizado de una variante desde la API
+  async function getFreshVariantStock(
+    productSlug: string,
+    variantId: number
+  ): Promise<number | null> {
+    try {
+      const product = await productsApi.getBySlug(productSlug)
+      const variant = product.variants.find(v => v.id === variantId)
+      return variant ? variant.stock : null
+    } catch {
+      // Si falla la API, no bloqueamos — el backend validará al confirmar
+      return null
     }
   }
 
@@ -94,16 +123,35 @@ export const useCartStore = defineStore('cart', () => {
     if (discountResult.value) void applyDiscount(discountCode.value)
   }
 
-  function updateQuantity(productId: number, variantId: number | undefined, quantity: number) {
+  // updateQuantity con validación de stock local
+  function updateQuantity(
+    productId: number,
+    variantId: number | undefined,
+    quantity: number
+  ): { success: boolean; error?: string } {
     const idx = findIndex(productId, variantId)
-    if (idx < 0) return
+    if (idx < 0) return { success: false }
+
     if (quantity <= 0) {
       removeItem(productId, variantId)
-      return
+      return { success: true }
     }
+
+    const item = items.value[idx]
+
+    // Validar contra el maxStock guardado localmente
+    if (item.maxStock !== undefined && quantity > item.maxStock) {
+      return {
+        success: false,
+        error:   `Solo hay ${item.maxStock} unidades disponibles`,
+      }
+    }
+
     items.value[idx].quantity = quantity
     persist()
+
     if (discountResult.value) void applyDiscount(discountCode.value)
+    return { success: true }
   }
 
   function clearCart() {
@@ -114,12 +162,11 @@ export const useCartStore = defineStore('cart', () => {
     persist()
   }
 
-  // ── Descuentos ─────────────────────────────────────
+  // ── Descuentos ─────────────────────────────────────────────
   async function applyDiscount(code: string) {
     if (!code.trim()) return
     discountLoading.value = true
     discountError.value   = null
-
     try {
       discountResult.value = await discountsApi.validate(
         code.trim().toUpperCase(),
@@ -143,12 +190,9 @@ export const useCartStore = defineStore('cart', () => {
   }
 
   return {
-    // state
     items, discountCode, discountResult,
     discountLoading, discountError,
-    // getters
     itemCount, subtotal, discountAmount, total, isEmpty,
-    // actions
     addItem, removeItem, updateQuantity, clearCart,
     applyDiscount, removeDiscount,
   }

@@ -4,6 +4,7 @@ import { useCartStore } from '../stores/cart.store'
 import { useToast } from '../composables/useToast'
 import AppNavbar from '../components/ui/AppNavbar.vue'
 import CartItemRow from '../components/cart/CartItemRow.vue'
+import CartTimer from '../components/cart/CartTimer.vue'
 
 const cart = useCartStore()
 const toast = useToast()
@@ -58,7 +59,8 @@ function handleClearCart() {
           Ver productos
         </RouterLink>
       </div>
-
+      <!-- Timer del carrito -->
+      <CartTimer v-if="!cart.isEmpty" class="mb-2" />
       <!-- Lista de items -->
       <div v-else class="flex flex-col gap-4">
 

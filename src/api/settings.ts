@@ -7,6 +7,7 @@ export interface StoreSettings {
   whatsappNumber:   string | null
   storeName:        string | null
   storeDescription: string | null
+  paymentQrUrl:     string | null
   updatedAt:        string
 }
 
@@ -14,6 +15,7 @@ export interface UpdateSettingsPayload {
   whatsappNumber?:   string | null
   storeName?:        string | null
   storeDescription?: string | null
+  paymentQrUrl?:     string | null
 }
 
 export const settingsApi = {

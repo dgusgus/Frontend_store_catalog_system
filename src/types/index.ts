@@ -3,6 +3,7 @@ export interface AuthUser {
   id: number
   email: string
   name?: string
+  phone?: string
   role: 'USER' | 'ADMIN'
   createdAt: string
 }
@@ -108,6 +109,7 @@ export interface CartItem {
   variantName?: string
   price:       number   // precio efectivo al momento de agregar
   quantity:    number
+  maxStock:    number  // para validar incrementos sin API
 }
 
 export interface DiscountResult {

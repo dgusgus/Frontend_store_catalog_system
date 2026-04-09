@@ -25,6 +25,22 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.setItem('refreshToken', result.refreshToken)
   }
 
+  async function register(
+    email: string,
+    password: string,
+    name?: string,
+    phone?: string
+  ){
+    const result = await authApi.register(email, password, name, phone)
+
+    user.value = result.user
+    accessToken.value = result.accessToken
+    refreshToken.value = result.refreshToken
+
+    localStorage.setItem('accessToken', result.accessToken)
+    localStorage.setItem('refreshToken', result.refreshToken)
+  }
+
   async function logout() {
     if (refreshToken.value) {
       await authApi.logout(refreshToken.value).catch(() => {})
@@ -40,5 +56,5 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.removeItem('refreshToken')
   }
 
-  return { user, accessToken, isAuthenticated, isAdmin, login, logout }
+  return { user, accessToken, isAuthenticated, isAdmin, login, logout, register}
 })

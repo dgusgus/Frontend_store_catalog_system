@@ -3,27 +3,24 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { settingsApi } from '../api/settings'
-import type { UpdateSettingsPayload } from '../api/settings'
+import type { StoreSettings, UpdateSettingsPayload } from '../api/settings'
+// ↑ Importamos el tipo desde api/settings — así si agregamos campos ahí,
+//   el store los hereda automáticamente sin tener que duplicar el tipo
 
 export const useSettingsStore = defineStore('settings', () => {
 
-  const settings = ref<{
-    id:               number
-    whatsappNumber:   string | null
-    storeName:        string | null
-    storeDescription: string | null
-    updatedAt:        string
-  } | null>(null)
+  // Antes: tipo inline que no tenía paymentQrUrl
+  // Ahora: usa StoreSettings directamente
+  const settings = ref<StoreSettings | null>(null)
 
   const loading = ref(false)
   const error   = ref<string | null>(null)
 
-  // El número formateado listo para usar en wa.me
   const whatsappNumber = computed(() => settings.value?.whatsappNumber ?? null)
   const hasWhatsapp    = computed(() => !!whatsappNumber.value)
+  const paymentQrUrl   = computed(() => settings.value?.paymentQrUrl ?? null)
 
   async function fetchSettings() {
-    // Si ya los tenemos en memoria, no volvemos a pedir
     if (settings.value) return
 
     loading.value = true
@@ -49,6 +46,7 @@ export const useSettingsStore = defineStore('settings', () => {
     error,
     whatsappNumber,
     hasWhatsapp,
+    paymentQrUrl,   // ← expuesto como computed para uso directo
     fetchSettings,
     updateSettings,
   }
