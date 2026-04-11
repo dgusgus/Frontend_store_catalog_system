@@ -7,6 +7,7 @@ import { useSettingsStore } from '../stores/settings.store'
 import { useAuthStore }     from '../stores/auth.store'
 import { useToast }         from '../composables/useToast'
 import { useWhatsApp }      from '../composables/useWhatsApp'
+import { useActiveOrder }   from '../composables/useActiveOrder'
 import { ordersApi }        from '../api/orders'
 import { ApiRequestError }  from '../api/fetcher'
 import AppNavbar from '../components/ui/AppNavbar.vue'
@@ -18,29 +19,39 @@ const settings = useSettingsStore()
 const auth     = useAuthStore()
 const toast    = useToast()
 const wa       = useWhatsApp()
+const active   = useActiveOrder()
 
-const customerPhone = ref('')
 const createdOrder  = ref<Order | null>(null)
 const submitting    = ref(false)
 
-onMounted(() => settings.fetchSettings())
+// Si el usuario no tiene phone guardado, se lo pedimos aquí
+const manualPhone = ref('')
 
-// ── Validación ─────────────────────────────────────────────
-const canSubmit = computed(() =>
-  !cart.isEmpty &&
-  !submitting.value &&
-  auth.isAuthenticated &&
-  customerPhone.value.trim().length >= 7
+// Teléfono efectivo: primero del usuario, si no el ingresado manualmente
+const effectivePhone = computed(() =>
+  auth.user?.phone?.trim() || manualPhone.value.trim()
 )
 
-// ── Confirmar pedido ───────────────────────────────────────
+// El usuario necesita ingresar teléfono manualmente solo si no tiene uno
+const needsPhone = computed(() => !auth.user?.phone?.trim())
+
+onMounted(() => settings.fetchSettings())
+
+const canSubmit = computed(() =>
+  !cart.isEmpty                    &&
+  !submitting.value                &&
+  auth.isAuthenticated             &&
+  active.canCreateOrder.value      &&
+  (!needsPhone.value || manualPhone.value.trim().length >= 7)
+)
+
 async function handleConfirm() {
   if (!canSubmit.value) return
   submitting.value = true
   try {
     const order = await ordersApi.create({
-      customerName:  auth.user?.name ?? auth.user?.email ?? 'Cliente',
-      customerPhone: customerPhone.value.trim(),
+      customerName:  auth.user?.name  ?? auth.user?.email ?? 'Cliente',
+      customerPhone: effectivePhone.value,
       discountCode:  cart.discountCode || undefined,
       items: cart.items.map(item => ({
         productId: item.productId,
@@ -50,6 +61,7 @@ async function handleConfirm() {
     })
 
     createdOrder.value = order
+    active.setActiveOrder(order)
     cart.clearCart()
     toast.success(`Pedido ${order.orderNumber} creado`)
     wa.openWhatsApp(order, 'app')
@@ -95,8 +107,6 @@ const summaryLines = computed(() =>
 
       <!-- ── PEDIDO CONFIRMADO ───────────────────────────── -->
       <template v-if="createdOrder">
-
-        <!-- Card de éxito -->
         <div class="card bg-success/10 border border-success/30 shadow-sm">
           <div class="card-body p-5 items-center text-center gap-3">
             <div class="text-4xl">✅</div>
@@ -104,17 +114,12 @@ const summaryLines = computed(() =>
               <p class="font-bold text-lg text-success">¡Pedido confirmado!</p>
               <p class="text-2xl font-mono font-bold mt-1">{{ createdOrder.orderNumber }}</p>
               <p class="text-sm text-base-content/60 mt-2">
-                El vendedor recibió tu pedido por WhatsApp y lo confirmará en breve.
+                El vendedor recibió tu pedido y lo confirmará en breve.
               </p>
             </div>
-
-            <!-- Resumen de items -->
             <div class="w-full bg-base-100 rounded-xl p-3 text-left mt-1">
-              <div
-                v-for="item in createdOrder.items"
-                :key="item.id"
-                class="flex justify-between text-sm py-1.5 border-b border-base-200 last:border-0"
-              >
+              <div v-for="item in createdOrder.items" :key="item.id"
+                class="flex justify-between text-sm py-1.5 border-b border-base-200 last:border-0">
                 <span class="text-base-content/70">
                   {{ item.productName }}
                   <span v-if="item.variantName" class="text-xs text-base-content/40">
@@ -132,46 +137,31 @@ const summaryLines = computed(() =>
           </div>
         </div>
 
-        <!-- ── QR de pago ─────────────────────────────────────
-             Aquí createdOrder ya está garantizado como no-null
-             porque estamos dentro de <template v-if="createdOrder">
-        -->
+        <!-- QR de pago -->
         <div v-if="settings.paymentQrUrl" class="card bg-base-100 shadow-sm">
           <div class="card-body p-4 items-center gap-3">
-
             <h2 class="font-semibold text-sm text-base-content/60 uppercase tracking-wide w-full">
               Pago bancario
             </h2>
-
             <p class="text-sm text-base-content/70 text-center">
               Escaneá el QR para transferir el monto total
             </p>
-
-            <!-- Monto destacado — createdOrder no puede ser null aquí -->
             <div class="bg-primary/10 rounded-xl px-6 py-3 text-center w-full">
               <p class="text-xs text-base-content/50 uppercase tracking-wide">Monto a transferir</p>
               <p class="text-3xl font-bold text-primary mt-1">
                 ${{ Number(createdOrder.total).toFixed(2) }}
               </p>
             </div>
-
-            <!-- QR — settings.paymentQrUrl ya es string no-null por el v-if del padre -->
             <div class="bg-white rounded-2xl p-4 shadow-sm border border-base-200">
-              <img
-                :src="settings.paymentQrUrl"
-                alt="QR de pago"
-                class="w-48 h-48 object-contain"
-              />
+              <img :src="settings.paymentQrUrl" alt="QR de pago"
+                class="w-48 h-48 object-contain" />
             </div>
-
             <p class="text-xs text-base-content/40 text-center">
               Después de transferir, enviá el comprobante por WhatsApp
             </p>
-
           </div>
         </div>
 
-        <!-- Acciones post-confirmación -->
         <div class="flex flex-col gap-2">
           <button class="btn btn-success w-full gap-2 text-white" @click="handleReopenWhatsApp">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-5">
@@ -187,11 +177,11 @@ const summaryLines = computed(() =>
             Seguir comprando
           </button>
         </div>
-
       </template>
 
       <!-- ── CARRITO VACÍO ──────────────────────────────── -->
-      <div v-else-if="cart.isEmpty" class="flex flex-col items-center gap-4 py-16 text-center">
+      <div v-else-if="cart.isEmpty"
+        class="flex flex-col items-center gap-4 py-16 text-center">
         <span class="text-5xl">🛒</span>
         <p class="text-base-content/60">No hay productos en el carrito</p>
         <RouterLink to="/catalog" class="btn btn-primary btn-sm">Ver productos</RouterLink>
@@ -206,11 +196,8 @@ const summaryLines = computed(() =>
             <h2 class="font-semibold text-sm text-base-content/60 uppercase tracking-wide">
               Productos
             </h2>
-            <div
-              v-for="line in summaryLines"
-              :key="`${line.slug}-${line.variant}`"
-              class="flex items-center gap-3 py-2 border-b border-base-200 last:border-0"
-            >
+            <div v-for="line in summaryLines" :key="`${line.slug}-${line.variant}`"
+              class="flex items-center gap-3 py-2 border-b border-base-200 last:border-0">
               <div class="size-14 rounded-xl overflow-hidden bg-base-200 shrink-0">
                 <img v-if="line.image" :src="line.image" :alt="line.name"
                   class="w-full h-full object-cover" loading="lazy" />
@@ -250,7 +237,7 @@ const summaryLines = computed(() =>
           </div>
         </div>
 
-        <!-- Botón condicional -->
+        <!-- Acciones -->
         <div class="flex flex-col gap-2">
 
           <!-- NO autenticado -->
@@ -274,16 +261,46 @@ const summaryLines = computed(() =>
             </p>
           </template>
 
-          <!-- SÍ autenticado -->
+          <!-- Tiene pedido activo — no puede crear otro -->
+          <template v-else-if="active.hasPending.value">
+            <div class="alert alert-warning">
+              <svg xmlns="http://www.w3.org/2000/svg" class="size-5 shrink-0" fill="none"
+                viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+              </svg>
+              <div>
+                <p class="font-semibold text-sm">Ya tenés un pedido activo</p>
+                <p class="text-xs mt-0.5">
+                  El pedido
+                  <span class="font-mono font-bold">
+                    {{ active.activeOrder.value?.orderNumber }}
+                  </span>
+                  está
+                  {{ active.activeOrder.value?.status === 'PENDING'
+                    ? 'esperando confirmación'
+                    : 'confirmado y en proceso' }}.
+                  Podrás hacer uno nuevo cuando sea entregado o rechazado.
+                </p>
+              </div>
+            </div>
+            <RouterLink to="/my-orders" class="btn btn-warning w-full gap-2">
+              Ver mi pedido pendiente
+            </RouterLink>
+          </template>
+
+          <!-- Autenticado sin pedido activo -->
           <template v-else>
-            <div class="card bg-base-100 shadow-sm">
-              <div class="card-body p-4 gap-3">
+
+            <!-- Teléfono — solo si el usuario no tiene uno registrado -->
+            <div v-if="needsPhone" class="card bg-base-100 shadow-sm">
+              <div class="card-body p-4 gap-2">
                 <h2 class="font-semibold text-sm text-base-content/60 uppercase tracking-wide">
                   Tu teléfono
                 </h2>
                 <label class="form-control">
                   <input
-                    v-model="customerPhone"
+                    v-model="manualPhone"
                     type="tel"
                     inputmode="tel"
                     placeholder="71234567"
