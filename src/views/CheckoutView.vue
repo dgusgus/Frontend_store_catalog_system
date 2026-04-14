@@ -21,36 +21,34 @@ const toast    = useToast()
 const wa       = useWhatsApp()
 const active   = useActiveOrder()
 
-const createdOrder  = ref<Order | null>(null)
-const submitting    = ref(false)
+const createdOrder = ref<Order | null>(null)
+const submitting   = ref(false)
+const manualPhone  = ref('')
 
-// Si el usuario no tiene phone guardado, se lo pedimos aquí
-const manualPhone = ref('')
-
-// Teléfono efectivo: primero del usuario, si no el ingresado manualmente
 const effectivePhone = computed(() =>
   auth.user?.phone?.trim() || manualPhone.value.trim()
 )
-
-// El usuario necesita ingresar teléfono manualmente solo si no tiene uno
 const needsPhone = computed(() => !auth.user?.phone?.trim())
 
-onMounted(() => settings.fetchSettings())
-
 const canSubmit = computed(() =>
-  !cart.isEmpty                    &&
-  !submitting.value                &&
-  auth.isAuthenticated             &&
-  active.canCreateOrder.value      &&
+  !cart.isEmpty                &&
+  !submitting.value            &&
+  auth.isAuthenticated         &&
+  active.canCreateOrder.value  &&
   (!needsPhone.value || manualPhone.value.trim().length >= 7)
 )
+
+onMounted(async () => {
+  settings.fetchSettings()
+  await active.refreshActiveOrder()
+})
 
 async function handleConfirm() {
   if (!canSubmit.value) return
   submitting.value = true
   try {
     const order = await ordersApi.create({
-      customerName:  auth.user?.name  ?? auth.user?.email ?? 'Cliente',
+      customerName:  auth.user?.name ?? auth.user?.email ?? 'Cliente',
       customerPhone: effectivePhone.value,
       discountCode:  cart.discountCode || undefined,
       items: cart.items.map(item => ({
@@ -64,7 +62,9 @@ async function handleConfirm() {
     active.setActiveOrder(order)
     cart.clearCart()
     toast.success(`Pedido ${order.orderNumber} creado`)
-    wa.openWhatsApp(order, 'app')
+
+    // ← NO abrimos WhatsApp automáticamente aquí
+    // El usuario lo hace tocando el botón en la pantalla de confirmación
 
   } catch (e) {
     toast.error(e instanceof ApiRequestError ? e.message : 'Error al crear el pedido.')
@@ -73,7 +73,8 @@ async function handleConfirm() {
   }
 }
 
-function handleReopenWhatsApp() {
+// Solo se llama cuando el usuario toca el botón explícitamente
+function handleSendWhatsApp() {
   if (!createdOrder.value) return
   wa.openWhatsApp(createdOrder.value, 'app')
 }
@@ -94,7 +95,6 @@ const summaryLines = computed(() =>
 <template>
   <div class="min-h-screen bg-base-200">
     <AppNavbar />
-
     <main class="max-w-lg mx-auto px-4 pb-10 pt-4 flex flex-col gap-4">
 
       <div>
@@ -105,18 +105,20 @@ const summaryLines = computed(() =>
         <p class="text-sm text-base-content/50 mt-0.5">Revisá tu pedido antes de enviarlo</p>
       </div>
 
-      <!-- ── PEDIDO CONFIRMADO ───────────────────────────── -->
+      <!-- ── PEDIDO CREADO ───────────────────────────────── -->
       <template v-if="createdOrder">
+
         <div class="card bg-success/10 border border-success/30 shadow-sm">
           <div class="card-body p-5 items-center text-center gap-3">
             <div class="text-4xl">✅</div>
             <div>
-              <p class="font-bold text-lg text-success">¡Pedido confirmado!</p>
+              <p class="font-bold text-lg text-success">¡Pedido creado!</p>
               <p class="text-2xl font-mono font-bold mt-1">{{ createdOrder.orderNumber }}</p>
               <p class="text-sm text-base-content/60 mt-2">
-                El vendedor recibió tu pedido y lo confirmará en breve.
+                Ahora enviá el pedido al vendedor por WhatsApp para que lo confirme.
               </p>
             </div>
+
             <div class="w-full bg-base-100 rounded-xl p-3 text-left mt-1">
               <div v-for="item in createdOrder.items" :key="item.id"
                 class="flex justify-between text-sm py-1.5 border-b border-base-200 last:border-0">
@@ -143,9 +145,6 @@ const summaryLines = computed(() =>
             <h2 class="font-semibold text-sm text-base-content/60 uppercase tracking-wide w-full">
               Pago bancario
             </h2>
-            <p class="text-sm text-base-content/70 text-center">
-              Escaneá el QR para transferir el monto total
-            </p>
             <div class="bg-primary/10 rounded-xl px-6 py-3 text-center w-full">
               <p class="text-xs text-base-content/50 uppercase tracking-wide">Monto a transferir</p>
               <p class="text-3xl font-bold text-primary mt-1">
@@ -153,8 +152,7 @@ const summaryLines = computed(() =>
               </p>
             </div>
             <div class="bg-white rounded-2xl p-4 shadow-sm border border-base-200">
-              <img :src="settings.paymentQrUrl" alt="QR de pago"
-                class="w-48 h-48 object-contain" />
+              <img :src="settings.paymentQrUrl" alt="QR de pago" class="w-48 h-48 object-contain" />
             </div>
             <p class="text-xs text-base-content/40 text-center">
               Después de transferir, enviá el comprobante por WhatsApp
@@ -162,13 +160,20 @@ const summaryLines = computed(() =>
           </div>
         </div>
 
+        <!-- Acciones -->
         <div class="flex flex-col gap-2">
-          <button class="btn btn-success w-full gap-2 text-white" @click="handleReopenWhatsApp">
+
+          <!-- Botón principal: enviar por WhatsApp — el usuario lo toca cuando quiere -->
+          <button
+            class="btn btn-success w-full gap-2 text-base text-white"
+            @click="handleSendWhatsApp"
+          >
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-5">
               <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
             </svg>
-            Reenviar por WhatsApp
+            Enviar pedido por WhatsApp
           </button>
+
           <RouterLink to="/my-orders" class="btn btn-outline w-full">
             Ver estado de mis pedidos
           </RouterLink>
@@ -177,11 +182,11 @@ const summaryLines = computed(() =>
             Seguir comprando
           </button>
         </div>
+
       </template>
 
       <!-- ── CARRITO VACÍO ──────────────────────────────── -->
-      <div v-else-if="cart.isEmpty"
-        class="flex flex-col items-center gap-4 py-16 text-center">
+      <div v-else-if="cart.isEmpty" class="flex flex-col items-center gap-4 py-16 text-center">
         <span class="text-5xl">🛒</span>
         <p class="text-base-content/60">No hay productos en el carrito</p>
         <RouterLink to="/catalog" class="btn btn-primary btn-sm">Ver productos</RouterLink>
@@ -240,7 +245,7 @@ const summaryLines = computed(() =>
         <!-- Acciones -->
         <div class="flex flex-col gap-2">
 
-          <!-- NO autenticado -->
+          <!-- No autenticado -->
           <template v-if="!auth.isAuthenticated">
             <div class="alert alert-info text-sm">
               <svg xmlns="http://www.w3.org/2000/svg" class="size-5 shrink-0" fill="none"
@@ -250,7 +255,7 @@ const summaryLines = computed(() =>
               </svg>
               <span>Necesitás una cuenta para confirmar tu pedido.</span>
             </div>
-            <RouterLink to="/login" class="btn btn-primary w-full text-base">
+            <RouterLink to="/login" class="btn btn-primary w-full">
               Iniciar sesión para continuar
             </RouterLink>
             <p class="text-center text-sm text-base-content/50">
@@ -261,7 +266,7 @@ const summaryLines = computed(() =>
             </p>
           </template>
 
-          <!-- Tiene pedido activo — no puede crear otro -->
+          <!-- Tiene pedido activo -->
           <template v-else-if="active.hasPending.value">
             <div class="alert alert-warning">
               <svg xmlns="http://www.w3.org/2000/svg" class="size-5 shrink-0" fill="none"
@@ -273,39 +278,27 @@ const summaryLines = computed(() =>
                 <p class="font-semibold text-sm">Ya tenés un pedido activo</p>
                 <p class="text-xs mt-0.5">
                   El pedido
-                  <span class="font-mono font-bold">
-                    {{ active.activeOrder.value?.orderNumber }}
-                  </span>
-                  está
-                  {{ active.activeOrder.value?.status === 'PENDING'
-                    ? 'esperando confirmación'
-                    : 'confirmado y en proceso' }}.
-                  Podrás hacer uno nuevo cuando sea entregado o rechazado.
+                  <span class="font-mono font-bold">{{ active.activeOrder.value?.orderNumber }}</span>
+                  está {{ active.activeOrder.value?.status === 'PENDING' ? 'esperando confirmación' : 'confirmado y en proceso' }}.
+                  Podrás hacer uno nuevo cuando lo marques como recibido.
                 </p>
               </div>
             </div>
-            <RouterLink to="/my-orders" class="btn btn-warning w-full gap-2">
-              Ver mi pedido pendiente
+            <RouterLink to="/my-orders" class="btn btn-warning w-full">
+              Ver mi pedido activo
             </RouterLink>
           </template>
 
-          <!-- Autenticado sin pedido activo -->
+          <!-- Puede confirmar -->
           <template v-else>
-
-            <!-- Teléfono — solo si el usuario no tiene uno registrado -->
             <div v-if="needsPhone" class="card bg-base-100 shadow-sm">
               <div class="card-body p-4 gap-2">
                 <h2 class="font-semibold text-sm text-base-content/60 uppercase tracking-wide">
                   Tu teléfono
                 </h2>
                 <label class="form-control">
-                  <input
-                    v-model="manualPhone"
-                    type="tel"
-                    inputmode="tel"
-                    placeholder="71234567"
-                    class="input input-bordered input-sm"
-                  />
+                  <input v-model="manualPhone" type="tel" inputmode="tel"
+                    placeholder="71234567" class="input input-bordered input-sm" />
                   <div class="label pt-1">
                     <span class="label-text-alt text-base-content/40">
                       Para que el vendedor pueda contactarte
@@ -327,10 +320,8 @@ const summaryLines = computed(() =>
               </svg>
               {{ submitting ? 'Creando pedido...' : 'Confirmar pedido' }}
             </button>
-
             <p class="text-xs text-center text-base-content/40">
-              Comprando como
-              <span class="font-medium">{{ auth.user?.name ?? auth.user?.email }}</span>
+              Comprando como <span class="font-medium">{{ auth.user?.name ?? auth.user?.email }}</span>
             </p>
           </template>
 

@@ -8,11 +8,9 @@ import type { PaginatedResponse } from '../types'
 
 export const useOrdersStore = defineStore('orders', () => {
 
-  const orders  = ref<PaginatedResponse<Order> | null>(null)
-  const loading = ref(false)
-  const error   = ref<string | null>(null)
-
-  // Conteo de pendientes para el badge en el tab
+  const orders       = ref<PaginatedResponse<Order> | null>(null)
+  const loading      = ref(false)
+  const error        = ref<string | null>(null)
   const pendingCount = ref(0)
 
   async function fetchOrders(params: { status?: OrderStatus; page?: number } = {}) {
@@ -21,7 +19,6 @@ export const useOrdersStore = defineStore('orders', () => {
     try {
       orders.value = await ordersApi.getAll(params)
 
-      // Si estamos viendo todas, también actualizar el conteo de pendientes
       if (!params.status) {
         pendingCount.value = orders.value.items.filter(
           o => o.status === 'PENDING'
@@ -37,18 +34,25 @@ export const useOrdersStore = defineStore('orders', () => {
   async function updateStatus(id: number, payload: UpdateOrderStatusPayload) {
     const updated = await ordersApi.updateStatus(id, payload)
 
-    // Actualizar en la lista local sin refetch
     if (orders.value) {
       const idx = orders.value.items.findIndex(o => o.id === id)
       if (idx >= 0) orders.value.items[idx] = updated
     }
 
-    // Restar del conteo de pendientes si se resolvió
     if (payload.status === 'CONFIRMED' || payload.status === 'REJECTED') {
       pendingCount.value = Math.max(0, pendingCount.value - 1)
     }
 
     return updated
+  }
+
+  async function deleteOrder(id: number) {
+    await ordersApi.deleteRejected(id)
+
+    if (orders.value) {
+      orders.value.items = orders.value.items.filter(o => o.id !== id)
+      orders.value.pagination.total--
+    }
   }
 
   return {
@@ -58,5 +62,6 @@ export const useOrdersStore = defineStore('orders', () => {
     pendingCount,
     fetchOrders,
     updateStatus,
+    deleteOrder,
   }
 })

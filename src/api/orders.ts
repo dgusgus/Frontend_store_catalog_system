@@ -17,26 +17,26 @@ export interface OrderItem {
 }
 
 export interface Order {
-  id:            number
-  orderNumber:   string
-  status:        OrderStatus
-  customerName:  string
-  customerPhone: string
-  subtotal:      string
-  discountCode:  string | null
+  id:             number
+  orderNumber:    string
+  status:         OrderStatus
+  customerName:   string
+  customerPhone:  string
+  subtotal:       string
+  discountCode:   string | null
   discountAmount: string
-  total:         string
-  adminNote:     string | null
-  createdAt:     string
-  updatedAt:     string
-  user:          { id: number; name: string | null; email: string }
-  items:         OrderItem[]
+  total:          string
+  adminNote:      string | null
+  createdAt:      string
+  updatedAt:      string
+  user:           { id: number; name: string | null; email: string }
+  items:          OrderItem[]
 }
 
 export interface CreateOrderPayload {
-  customerName:  string
-  customerPhone: string
-  discountCode?: string
+  customerName:   string
+  customerPhone:  string
+  discountCode?:  string
   items: {
     productId:  number
     variantId?: number
@@ -45,11 +45,12 @@ export interface CreateOrderPayload {
 }
 
 export interface UpdateOrderStatusPayload {
-  status:    'CONFIRMED' | 'REJECTED' | 'DELIVERED'
+  status:     'CONFIRMED' | 'REJECTED' | 'DELIVERED'
   adminNote?: string
 }
 
 export const ordersApi = {
+
   // ── Cliente ────────────────────────────────────────────
   create(payload: CreateOrderPayload) {
     return fetcher<Order>('/orders', {
@@ -62,6 +63,13 @@ export const ordersApi = {
   getMyOrders(page = 1) {
     return fetcher<PaginatedResponse<Order>>(`/orders/my?page=${page}`, {
       auth: true,
+    })
+  },
+
+  confirmReceived(id: number) {
+    return fetcher<Order>(`/orders/${id}/received`, {
+      method: 'PATCH',
+      auth:   true,
     })
   },
 
@@ -86,6 +94,13 @@ export const ordersApi = {
       method: 'PATCH',
       auth:   true,
       body:   JSON.stringify(payload),
+    })
+  },
+
+  deleteRejected(id: number) {
+    return fetcher<void>(`/orders/${id}`, {
+      method: 'DELETE',
+      auth:   true,
     })
   },
 }

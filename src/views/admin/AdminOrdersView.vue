@@ -9,10 +9,7 @@ import type { Order, OrderStatus } from '../../api/orders'
 const store = useOrdersStore()
 const toast = useToast()
 
-// ── Filtro de estado activo ────────────────────────────────
-const activeFilter = ref<OrderStatus | undefined>(undefined)
-
-// ── Modal de detalle / acción ──────────────────────────────
+const activeFilter  = ref<OrderStatus | undefined>(undefined)
 const selectedOrder = ref<Order | null>(null)
 const adminNote     = ref('')
 const actionLoading = ref(false)
@@ -44,7 +41,6 @@ async function handleAction(status: 'CONFIRMED' | 'REJECTED') {
     })
     toast.success(status === 'CONFIRMED' ? 'Pedido aceptado ✓' : 'Pedido rechazado')
     closeModal()
-    // Refrescar para mostrar conteos actualizados
     store.fetchOrders({ status: activeFilter.value })
   } catch (e) {
     toast.error(e instanceof ApiRequestError ? e.message : 'Error al actualizar')
@@ -53,12 +49,22 @@ async function handleAction(status: 'CONFIRMED' | 'REJECTED') {
   }
 }
 
-// ── Helpers de UI ──────────────────────────────────────────
+async function handleDelete(order: Order) {
+  if (!confirm(`¿Eliminar el pedido ${order.orderNumber}? Esta acción no se puede deshacer.`)) return
+  try {
+    await store.deleteOrder(order.id)
+    toast.success(`Pedido ${order.orderNumber} eliminado`)
+    closeModal()
+  } catch (e) {
+    toast.error(e instanceof ApiRequestError ? e.message : 'Error al eliminar')
+  }
+}
+
 const statusConfig: Record<OrderStatus, { label: string; class: string; icon: string }> = {
-  PENDING:   { label: 'Pendiente',  class: 'badge-warning',  icon: '⏳' },
-  CONFIRMED: { label: 'Aceptado',   class: 'badge-success',  icon: '✅' },
-  REJECTED:  { label: 'Rechazado',  class: 'badge-error',    icon: '❌' },
-  DELIVERED: { label: 'Entregado',  class: 'badge-info',     icon: '📦' },
+  PENDING:   { label: 'Pendiente', class: 'badge-warning', icon: '⏳' },
+  CONFIRMED: { label: 'Aceptado',  class: 'badge-success', icon: '✅' },
+  REJECTED:  { label: 'Rechazado', class: 'badge-error',   icon: '❌' },
+  DELIVERED: { label: 'Entregado', class: 'badge-info',    icon: '📦' },
 }
 
 function formatDate(iso: string): string {
@@ -89,14 +95,15 @@ function formatDate(iso: string): string {
       </button>
     </div>
 
-    <!-- Filtros de estado -->
+    <!-- Filtros -->
     <div class="flex gap-2 flex-wrap">
       <button
         v-for="opt in [
-          { label: 'Todos',      value: undefined },
+          { label: 'Todos',         value: undefined },
           { label: '⏳ Pendientes', value: 'PENDING'   as OrderStatus },
           { label: '✅ Aceptados',  value: 'CONFIRMED' as OrderStatus },
           { label: '❌ Rechazados', value: 'REJECTED'  as OrderStatus },
+          { label: '📦 Entregados', value: 'DELIVERED' as OrderStatus },
         ]"
         :key="String(opt.value)"
         class="btn btn-xs"
@@ -118,7 +125,7 @@ function formatDate(iso: string): string {
       <button class="btn btn-sm btn-ghost" @click="store.fetchOrders()">Reintentar</button>
     </div>
 
-    <!-- Lista de pedidos -->
+    <!-- Lista -->
     <div v-else class="flex flex-col gap-2">
 
       <div v-if="!store.orders?.items.length" class="text-center py-12 text-base-content/40">
@@ -134,12 +141,8 @@ function formatDate(iso: string): string {
       >
         <div class="card-body p-3 flex-row items-center gap-3">
 
-          <!-- Estado -->
-          <div class="shrink-0 text-2xl">
-            {{ statusConfig[order.status].icon }}
-          </div>
+          <div class="shrink-0 text-2xl">{{ statusConfig[order.status].icon }}</div>
 
-          <!-- Info -->
           <div class="flex-1 min-w-0">
             <div class="flex items-center gap-2">
               <span class="font-mono font-bold text-sm">{{ order.orderNumber }}</span>
@@ -156,7 +159,6 @@ function formatDate(iso: string): string {
             </p>
           </div>
 
-          <!-- Total -->
           <div class="shrink-0 text-right">
             <p class="font-bold text-base">${{ Number(order.total).toFixed(2) }}</p>
             <p v-if="Number(order.discountAmount) > 0" class="text-xs text-success">
@@ -164,9 +166,19 @@ function formatDate(iso: string): string {
             </p>
           </div>
 
-          <!-- Flecha -->
-          <svg xmlns="http://www.w3.org/2000/svg" class="size-4 text-base-content/30 shrink-0"
-            fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <!-- Botón eliminar directo en la lista — solo para REJECTED -->
+          <button
+            v-if="order.status === 'REJECTED'"
+            class="btn btn-ghost btn-xs text-error shrink-0"
+            title="Eliminar pedido rechazado"
+            @click.stop="handleDelete(order)"
+          >
+            🗑️
+          </button>
+
+          <svg v-else xmlns="http://www.w3.org/2000/svg"
+            class="size-4 text-base-content/30 shrink-0" fill="none"
+            viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
           </svg>
 
@@ -195,11 +207,10 @@ function formatDate(iso: string): string {
 
   </div>
 
-  <!-- ── Modal de detalle y acción ────────────────────────── -->
+  <!-- Modal de detalle -->
   <dialog class="modal" :class="{ 'modal-open': !!selectedOrder }">
     <div v-if="selectedOrder" class="modal-box w-full max-w-md">
 
-      <!-- Header del modal -->
       <div class="flex items-center justify-between mb-4">
         <div>
           <p class="font-mono font-bold text-lg">{{ selectedOrder.orderNumber }}</p>
@@ -210,7 +221,7 @@ function formatDate(iso: string): string {
         <button class="btn btn-sm btn-ghost btn-circle" @click="closeModal">✕</button>
       </div>
 
-      <!-- Datos del cliente -->
+      <!-- Cliente -->
       <div class="bg-base-200 rounded-xl p-3 mb-3">
         <p class="text-xs font-semibold text-base-content/50 uppercase tracking-wide mb-1">Cliente</p>
         <p class="text-sm font-medium">{{ selectedOrder.customerName }}</p>
@@ -218,12 +229,11 @@ function formatDate(iso: string): string {
         <p class="text-xs text-base-content/40 mt-1">{{ selectedOrder.user.email }}</p>
       </div>
 
-      <!-- Items del pedido -->
+      <!-- Items -->
       <div class="flex flex-col gap-1 mb-3">
         <p class="text-xs font-semibold text-base-content/50 uppercase tracking-wide mb-1">Productos</p>
         <div
-          v-for="item in selectedOrder.items"
-          :key="item.id"
+          v-for="item in selectedOrder.items" :key="item.id"
           class="flex justify-between items-center text-sm py-1.5 border-b border-base-200 last:border-0"
         >
           <div class="min-w-0">
@@ -243,7 +253,8 @@ function formatDate(iso: string): string {
           <span class="text-base-content/60">Subtotal</span>
           <span>${{ Number(selectedOrder.subtotal).toFixed(2) }}</span>
         </div>
-        <div v-if="Number(selectedOrder.discountAmount) > 0" class="flex justify-between text-sm text-success">
+        <div v-if="Number(selectedOrder.discountAmount) > 0"
+          class="flex justify-between text-sm text-success">
           <span>Descuento ({{ selectedOrder.discountCode }})</span>
           <span>−${{ Number(selectedOrder.discountAmount).toFixed(2) }}</span>
         </div>
@@ -259,44 +270,51 @@ function formatDate(iso: string): string {
         <span>Nota: {{ selectedOrder.adminNote }}</span>
       </div>
 
-      <!-- Acciones solo si está pendiente -->
+      <!-- Fecha -->
+      <p class="text-xs text-base-content/30 text-center mb-3">
+        Creado: {{ formatDate(selectedOrder.createdAt) }}
+      </p>
+
+      <!-- Acciones según estado -->
+
+      <!-- PENDING: aceptar o rechazar -->
       <template v-if="selectedOrder.status === 'PENDING'">
         <label class="form-control mb-3">
           <div class="label pb-1">
             <span class="label-text text-sm">Nota para el cliente</span>
             <span class="label-text-alt text-base-content/40">opcional</span>
           </div>
-          <textarea
-            v-model="adminNote"
-            class="textarea textarea-bordered textarea-sm h-16 resize-none"
-            placeholder="Ej: Tu pedido estará listo en 2 horas..."
-          ></textarea>
+          <textarea v-model="adminNote" class="textarea textarea-bordered textarea-sm h-16 resize-none"
+            placeholder="Ej: Tu pedido estará listo en 2 horas..."></textarea>
         </label>
-
         <div class="flex gap-2">
-          <button
-            class="btn btn-error flex-1 gap-1"
-            :disabled="actionLoading"
-            @click="handleAction('REJECTED')"
-          >
+          <button class="btn btn-error flex-1 gap-1" :disabled="actionLoading"
+            @click="handleAction('REJECTED')">
             <span v-if="actionLoading" class="loading loading-spinner loading-xs"></span>
             ❌ Rechazar
           </button>
-          <button
-            class="btn btn-success flex-1 gap-1 text-white"
-            :disabled="actionLoading"
-            @click="handleAction('CONFIRMED')"
-          >
+          <button class="btn btn-success flex-1 gap-1 text-white" :disabled="actionLoading"
+            @click="handleAction('CONFIRMED')">
             <span v-if="actionLoading" class="loading loading-spinner loading-xs"></span>
             ✅ Aceptar pedido
           </button>
         </div>
       </template>
 
-      <!-- Fecha -->
-      <p class="text-xs text-base-content/30 text-center mt-3">
-        Creado: {{ formatDate(selectedOrder.createdAt) }}
-      </p>
+      <!-- REJECTED: solo eliminar -->
+      <template v-if="selectedOrder.status === 'REJECTED'">
+        <button
+          class="btn btn-error btn-outline w-full gap-2"
+          @click="handleDelete(selectedOrder)"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="size-4" fill="none"
+            viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+          </svg>
+          Eliminar pedido rechazado
+        </button>
+      </template>
 
     </div>
     <div class="modal-backdrop" @click="closeModal"></div>

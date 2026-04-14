@@ -4,15 +4,19 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import { ordersApi }        from '../api/orders'
 import { useSettingsStore } from '../stores/settings.store'
 import { useActiveOrder }   from '../composables/useActiveOrder'
+import { useToast }         from '../composables/useToast'
+import { ApiRequestError }  from '../api/fetcher'
 import AppNavbar            from '../components/ui/AppNavbar.vue'
 import type { Order, OrderStatus } from '../api/orders'
 
 const settings = useSettingsStore()
 const active   = useActiveOrder()
+const toast    = useToast()
 
-const orders  = ref<Order[]>([])
-const loading = ref(true)
-const error   = ref<string | null>(null)
+const orders      = ref<Order[]>([])
+const loading     = ref(true)
+const error       = ref<string | null>(null)
+const confirming  = ref<number | null>(null)  // id del pedido que se está confirmando
 
 let pollInterval: ReturnType<typeof setInterval>
 
@@ -38,6 +42,28 @@ async function loadOrders() {
   }
 }
 
+// ── Confirmar recepción ────────────────────────────────────
+async function handleConfirmReceived(order: Order) {
+  confirming.value = order.id
+  try {
+    const updated = await ordersApi.confirmReceived(order.id)
+
+    // Actualizar localmente sin refetch
+    const idx = orders.value.findIndex(o => o.id === order.id)
+    if (idx >= 0) orders.value[idx] = updated
+
+    // Limpiar el pedido activo del singleton
+    await active.refreshActiveOrder()
+
+    toast.success(`¡Gracias! Pedido ${order.orderNumber} marcado como recibido.`)
+  } catch (e) {
+    toast.error(e instanceof ApiRequestError ? e.message : 'Error al confirmar')
+  } finally {
+    confirming.value = null
+  }
+}
+
+// ── Descargar QR ───────────────────────────────────────────
 async function downloadQr() {
   const url = settings.paymentQrUrl
   if (!url) return
@@ -54,6 +80,7 @@ async function downloadQr() {
   }
 }
 
+// ── Config visual por estado ───────────────────────────────
 const statusConfig: Record<OrderStatus, {
   label: string; icon: string
   bgClass: string; textClass: string; badgeClass: string
@@ -61,31 +88,30 @@ const statusConfig: Record<OrderStatus, {
 }> = {
   PENDING: {
     label: 'En espera', icon: '⏳',
-    bgClass: 'bg-warning/10 border-warning/30',
+    bgClass:   'bg-warning/10 border-warning/30',
     textClass: 'text-warning', badgeClass: 'badge-warning',
     message: 'Tu pedido fue recibido. El vendedor lo está revisando.',
   },
   CONFIRMED: {
     label: '¡Aceptado!', icon: '✅',
-    bgClass: 'bg-success/10 border-success/30',
+    bgClass:   'bg-success/10 border-success/30',
     textClass: 'text-success', badgeClass: 'badge-success',
-    message: 'Tu pedido fue aceptado. Pronto te contactarán.',
+    message: 'Tu pedido fue aceptado. Cuando lo recibas, confirmá la recepción.',
   },
   REJECTED: {
     label: 'Rechazado', icon: '❌',
-    bgClass: 'bg-error/10 border-error/30',
+    bgClass:   'bg-error/10 border-error/30',
     textClass: 'text-error', badgeClass: 'badge-error',
     message: 'Tu pedido no pudo ser procesado.',
   },
   DELIVERED: {
     label: 'Entregado', icon: '📦',
-    bgClass: 'bg-info/10 border-info/30',
-    textClass: 'text-info', badgeClass: 'badge-info',
-    message: '¡Tu pedido fue entregado!',
+    bgClass:   'bg-base-200 border-base-300',
+    textClass: 'text-base-content/60', badgeClass: 'badge-ghost',
+    message: '¡Pedido entregado! Gracias por tu compra.',
   },
 }
 
-// ¿Este pedido es el que tiene el timer activo?
 function isPendingWithTimer(order: Order): boolean {
   return order.status === 'PENDING' &&
     active.pendingOrder.value?.id === order.id &&
@@ -111,15 +137,18 @@ function formatDate(iso: string): string {
         <p class="text-sm text-base-content/50 mt-0.5">Estado de tus pedidos en tiempo real</p>
       </div>
 
+      <!-- Loading -->
       <div v-if="loading" class="flex flex-col gap-3">
         <div v-for="n in 2" :key="n" class="skeleton h-32 w-full rounded-xl"></div>
       </div>
 
+      <!-- Error -->
       <div v-else-if="error" class="alert alert-error">
         <span>{{ error }}</span>
         <button class="btn btn-sm btn-ghost" @click="loadOrders">Reintentar</button>
       </div>
 
+      <!-- Sin pedidos -->
       <div v-else-if="orders.length === 0"
         class="flex flex-col items-center gap-4 py-16 text-center">
         <span class="text-5xl">📭</span>
@@ -127,11 +156,12 @@ function formatDate(iso: string): string {
         <RouterLink to="/catalog" class="btn btn-primary btn-sm">Ver productos</RouterLink>
       </div>
 
+      <!-- Lista -->
       <div v-else class="flex flex-col gap-3">
         <div
           v-for="order in orders"
           :key="order.id"
-          class="card border shadow-sm"
+          class="card border shadow-sm transition-all"
           :class="statusConfig[order.status].bgClass"
         >
           <div class="card-body p-4 gap-3">
@@ -152,14 +182,14 @@ function formatDate(iso: string): string {
               {{ statusConfig[order.status].message }}
             </p>
 
-            <!-- ── Timer integrado en el card — solo para PENDING activo ── -->
+            <!-- Timer — solo para PENDING activo con tiempo restante -->
             <div
               v-if="isPendingWithTimer(order)"
               class="rounded-xl border p-3 transition-all"
               :class="{
-                'border-base-300 bg-base-100/50':                   active.urgency.value === 'normal',
-                'border-warning/50 bg-warning/10':                  active.urgency.value === 'warning',
-                'border-error/60 bg-error/10':                      active.urgency.value === 'critical',
+                'border-base-300 bg-base-100/50':  active.urgency.value === 'normal',
+                'border-warning/50 bg-warning/10': active.urgency.value === 'warning',
+                'border-error/60 bg-error/10':     active.urgency.value === 'critical',
               }"
             >
               <div class="flex items-center gap-3">
@@ -167,49 +197,33 @@ function formatDate(iso: string): string {
                   {{ active.urgency.value === 'critical' ? '🚨' : active.urgency.value === 'warning' ? '⚠️' : '⏱️' }}
                 </span>
                 <div class="flex-1 min-w-0">
-                  <p
-                    class="text-xs font-semibold"
+                  <p class="text-xs font-semibold"
                     :class="{
-                      'text-base-content':        active.urgency.value === 'normal',
-                      'text-warning':             active.urgency.value === 'warning',
-                      'text-error':               active.urgency.value === 'critical',
-                    }"
-                  >
-                    {{
-                      active.urgency.value === 'critical'
-                        ? '¡Expira muy pronto!'
-                        : active.urgency.value === 'warning'
-                        ? 'El tiempo se agota'
-                        : 'Tiempo para confirmar'
-                    }}
+                      'text-base-content': active.urgency.value === 'normal',
+                      'text-warning':      active.urgency.value === 'warning',
+                      'text-error':        active.urgency.value === 'critical',
+                    }">
+                    {{ active.urgency.value === 'critical' ? '¡Expira muy pronto!' : active.urgency.value === 'warning' ? 'El tiempo se agota' : 'Tiempo para confirmar' }}
                   </p>
-                  <p class="text-xs text-base-content/40">
-                    El vendedor tiene 15 min para aceptar
-                  </p>
+                  <p class="text-xs text-base-content/40">El vendedor tiene 15 min para aceptar</p>
                 </div>
-                <!-- Reloj digital -->
-                <span
-                  class="font-mono font-bold text-xl tabular-nums shrink-0"
+                <span class="font-mono font-bold text-xl tabular-nums shrink-0"
                   :class="{
                     'text-base-content':        active.urgency.value === 'normal',
                     'text-warning':             active.urgency.value === 'warning',
                     'text-error animate-pulse': active.urgency.value === 'critical',
-                  }"
-                >
+                  }">
                   {{ active.formattedTime.value }}
                 </span>
               </div>
-              <!-- Barra de progreso -->
               <div class="mt-2 h-1 bg-base-200 rounded-full overflow-hidden">
-                <div
-                  class="h-full rounded-full transition-all duration-1000"
+                <div class="h-full rounded-full transition-all duration-1000"
                   :class="{
-                    'bg-primary':  active.urgency.value === 'normal',
-                    'bg-warning':  active.urgency.value === 'warning',
-                    'bg-error':    active.urgency.value === 'critical',
+                    'bg-primary': active.urgency.value === 'normal',
+                    'bg-warning': active.urgency.value === 'warning',
+                    'bg-error':   active.urgency.value === 'critical',
                   }"
-                  :style="{ width: `${active.progressPercent.value}%` }"
-                />
+                  :style="{ width: `${active.progressPercent.value}%` }" />
               </div>
             </div>
 
@@ -222,8 +236,7 @@ function formatDate(iso: string): string {
 
             <!-- Items -->
             <div class="bg-base-100/60 rounded-xl p-3 flex flex-col gap-1">
-              <div v-for="item in order.items" :key="item.id"
-                class="flex justify-between text-sm">
+              <div v-for="item in order.items" :key="item.id" class="flex justify-between text-sm">
                 <span class="text-base-content/70 truncate flex-1 mr-2">
                   {{ item.productName }}
                   <span v-if="item.variantName" class="text-xs text-base-content/40">
@@ -231,9 +244,7 @@ function formatDate(iso: string): string {
                   </span>
                   × {{ item.quantity }}
                 </span>
-                <span class="font-medium shrink-0">
-                  ${{ Number(item.subtotal).toFixed(2) }}
-                </span>
+                <span class="font-medium shrink-0">${{ Number(item.subtotal).toFixed(2) }}</span>
               </div>
               <div class="flex justify-between font-bold text-sm pt-1.5 mt-0.5 border-t border-base-200">
                 <span>Total</span>
@@ -241,7 +252,7 @@ function formatDate(iso: string): string {
               </div>
             </div>
 
-            <!-- QR — solo para PENDING o CONFIRMED con QR configurado -->
+            <!-- QR de pago — para PENDING o CONFIRMED -->
             <div
               v-if="settings.paymentQrUrl && (order.status === 'PENDING' || order.status === 'CONFIRMED')"
               class="bg-base-100 rounded-xl p-4 flex flex-col items-center gap-3"
@@ -251,13 +262,10 @@ function formatDate(iso: string): string {
               </p>
               <div class="bg-primary/10 rounded-xl px-4 py-2 text-center w-full">
                 <p class="text-xs text-base-content/50">Monto a transferir</p>
-                <p class="text-2xl font-bold text-primary">
-                  ${{ Number(order.total).toFixed(2) }}
-                </p>
+                <p class="text-2xl font-bold text-primary">${{ Number(order.total).toFixed(2) }}</p>
               </div>
               <div class="bg-white rounded-xl p-3 border border-base-200">
-                <img :src="settings.paymentQrUrl" alt="QR de pago"
-                  class="w-36 h-36 object-contain" />
+                <img :src="settings.paymentQrUrl" alt="QR de pago" class="w-36 h-36 object-contain" />
               </div>
               <button class="btn btn-outline btn-sm w-full gap-2" @click="downloadQr">
                 <svg xmlns="http://www.w3.org/2000/svg" class="size-4" fill="none"
@@ -269,6 +277,38 @@ function formatDate(iso: string): string {
               </button>
             </div>
 
+            <!-- ── Botón confirmar recepción — solo para CONFIRMED ── -->
+            <div v-if="order.status === 'CONFIRMED'"
+              class="border-t border-success/20 pt-3 flex flex-col gap-2">
+
+              <div class="flex items-start gap-2 text-xs text-base-content/50">
+                <span class="shrink-0 mt-0.5">ℹ️</span>
+                <span>
+                  Cuando recibas tu pedido, tocá el botón para confirmarlo.
+                  Esto te permitirá hacer un nuevo pedido.
+                </span>
+              </div>
+
+              <button
+                class="btn btn-success w-full gap-2 text-white"
+                :class="{ 'loading': confirming === order.id }"
+                :disabled="confirming === order.id"
+                @click="handleConfirmReceived(order)"
+              >
+                <span v-if="confirming === order.id" class="loading loading-spinner loading-sm"></span>
+                <template v-else>
+                  <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none"
+                    viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M5 13l4 4L19 7"/>
+                  </svg>
+                  ¡Recibí mi pedido!
+                </template>
+              </button>
+
+            </div>
+
+            <!-- Fecha -->
             <p class="text-xs text-base-content/40 text-right">
               {{ formatDate(order.createdAt) }}
             </p>
